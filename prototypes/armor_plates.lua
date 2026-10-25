@@ -7,6 +7,10 @@
 local config = require("config")
 
 local PLATE_ICON = "__base__/graphics/icons/steel-plate.png"
+-- rendered graphics (tools/blender/plates.py, build_icons.py), if there are any
+local ok, rendered = pcall(require, "graphics.armor.icons")
+if not ok or type(rendered) ~= "table" then rendered = {} end
+local GRAPHICS = "__military-wagons__/graphics/armor/"
 
 data:extend({
   { type = "equipment-category", name = config.armor_category },
@@ -106,8 +110,9 @@ local TECHNOLOGIES = {
   },
 }
 
--- placeholder graphics until the plate renders are done
-local function icons(plate)
+-- the rendered icon, or a tinted steel plate with a badge as placeholder
+local function icons(name, plate)
+  if rendered[name] then return { { icon = GRAPHICS .. name .. "-icon.png", icon_size = 64 } } end
   local list = { { icon = PLATE_ICON, icon_size = 64, tint = plate.tint } }
   if plate.badge then list[2] = { icon = plate.badge, icon_size = 64, scale = 0.3, shift = { 8, 8 } } end
   return list
@@ -124,7 +129,7 @@ for order, entry in ipairs(config.plates) do
       {
         type = "item",
         name = name,
-        icons = icons(plate),
+        icons = icons(name, plate),
         place_as_equipment_result = name,
         subgroup = "military-equipment",
         order = string.format("f[military-wagon-armor]-%02d", order),
@@ -133,7 +138,9 @@ for order, entry in ipairs(config.plates) do
       {
         type = "battery-equipment",
         name = name,
-        sprite = { filename = PLATE_ICON, width = 64, height = 64, scale = 2, tint = plate.tint },
+        sprite = rendered[name]
+            and { filename = GRAPHICS .. name .. "-equipment.png", width = 256, height = 256, scale = 0.5 }
+          or { filename = PLATE_ICON, width = 64, height = 64, scale = 2, tint = plate.tint },
         shape = { width = 4, height = 4, type = "full" },
         -- a battery that holds nothing: equipment needs an energy source
         energy_source = { type = "electric", buffer_capacity = "1J", usage_priority = "tertiary" },

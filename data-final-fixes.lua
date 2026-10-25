@@ -31,9 +31,12 @@ if data.raw["ammo-turret"]["twin-cannon-wagon-turret"] or data.raw["ammo-turret"
         local projectile = table.deepcopy(data.raw["projectile"][node.projectile])
         projectile.name = copy
         projectile.force_condition = "not-same"
+        -- flies on along its line through the target point, like vtk-cannon-turret's shells
+        projectile.direction_only = true
         data:extend({ projectile })
       end
       node.projectile = copy
+      node.max_range = math.max(node.max_range or 0, config.shell_range)
     end
     for _, child in pairs(node) do
       own_side(child)

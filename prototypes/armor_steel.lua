@@ -5,6 +5,8 @@
 -- cokes it from coal. With Space Age the player has to get carbon the usual way.
 
 local space_age = data.raw.item["carbon"] ~= nil
+local ok, icons = pcall(require, "graphics.armor.icons")
+local rendered = ok and type(icons) == "table" and icons["armor-steel"]
 
 local carbon_tech
 if space_age then
@@ -47,7 +49,8 @@ data:extend({
   {
     type = "item",
     name = "armor-steel",
-    icons = { { icon = "__base__/graphics/icons/steel-plate.png", icon_size = 64, tint = { 0.7, 0.8, 0.95 } } },
+    icons = rendered and { { icon = "__military-wagons__/graphics/armor/armor-steel-icon.png", icon_size = 64 } }
+      or { { icon = "__base__/graphics/icons/steel-plate.png", icon_size = 64, tint = { 0.7, 0.8, 0.95 } } },
     subgroup = "intermediate-product",
     order = "a[armor-steel]",
     stack_size = 100,

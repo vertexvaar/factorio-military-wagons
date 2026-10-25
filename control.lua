@@ -21,8 +21,10 @@ local WAGON_NAMES = {}
 local TURRET_NAMES = {}
 -- every wagon switched on, also those without roof turrets (they get armour too)
 local ARMORED_NAMES = {}
+local ARMORED = {}
 for _, kind in pairs(config.enabled()) do
   ARMORED_NAMES[#ARMORED_NAMES + 1] = kind.name
+  ARMORED[kind.name] = true
   if #kind.mounts > 0 then
     kind.sink_steps = rigging.sink_steps(kind.mounts)
     KINDS[kind.name] = kind
@@ -355,9 +357,72 @@ local function on_destroyed(event)
   end
 end
 
+-- Armour plates. Equipment cannot give a vehicle resistances, so the plates' share
+-- is healed back right after a hit. A hit asks the grid only for the plates that
+-- resist its damage type; there is nothing to keep track of when plates come and go.
+
+-- PLATES[damage type] = { { name, flat, factor }, ... }
+local PLATES = {}
+for _, plate in pairs(config.plates) do
+  -- the tungsten plates exist only with Space Age
+  for damage_type, r in pairs(prototypes.equipment[plate.name] and plate.resistances or {}) do
+    PLATES[damage_type] = PLATES[damage_type] or {}
+    table.insert(PLATES[damage_type], { name = plate.name, flat = r[1], factor = 1 - r[2] / 100 })
+  end
+end
+local FLOOR = 1 - config.armor_cap / 100
+
+-- What the plates in a grid add against a damage type: flat decrease and the share of
+-- the damage that is left (capped).
+local function plating(grid, damage_type)
+  local flat, factor = 0, 1
+  for _, plate in pairs(PLATES[damage_type] or {}) do
+    local n = grid.count(plate.name)
+    if n > 0 then
+      flat = flat + n * plate.flat
+      factor = factor * plate.factor ^ n
+    end
+  end
+  return flat, math.max(factor, FLOOR)
+end
+
+-- Factorio's resistance formula: flat first, then percent; a hit never does nothing.
+local function resist(damage, flat, factor)
+  if damage > flat then return (damage - flat) * factor end
+  return factor / (2 + flat - damage)
+end
+
+-- storage.health[wagon unit number] = health after the last hit. A lethal hit leaves the
+-- wagon at 0 health without saying how much it had, so that comes from here. Repairs
+-- since then only make it an underestimate: then the plates save a little less.
+
+local function on_damaged(event)
+  local wagon = event.entity
+  if not wagon.valid then return end
+  local id = wagon.unit_number
+  local before = storage.health[id]
+  if not before then script.register_on_object_destroyed(wagon) end
+  storage.health[id] = event.final_health
+  local grid = wagon.grid
+  if not grid then return end
+  local flat, factor = plating(grid, event.damage_type.name)
+  if flat == 0 and factor == 1 then return end
+  local damage = event.final_damage_amount
+  local armored = resist(damage, flat, factor)
+  local health = event.final_health + damage - armored
+  if event.final_health <= 0 then
+    -- killed: what it had before the hit, as far as known, minus the armoured damage
+    health = math.min(before or wagon.max_health, damage) - armored
+  end
+  if health > 0 then
+    wagon.health = health
+    storage.health[id] = wagon.health
+  end
+end
+
 -- Wagon settings -------------------------------------------------------------
--- A panel beside the wagon window: target priorities for all wagons, and the
--- minimum range on wagons that have a choice. While it is open, the player (and only
+-- A panel beside the wagon window: what its armour plates do, target priorities for
+-- turret wagons, and the minimum range on wagons that have a choice. While it is open, the player (and only
 -- that player) sees the turrets' minimum and maximum range around the wagon.
 
 local PANEL = "military-wagons-panel"
@@ -411,9 +476,35 @@ local function close_panel(player)
   if player.gui.relative[PANEL] then player.gui.relative[PANEL].destroy() end
 end
 
-local function open_panel(player, rig)
+-- the damage types the plates cover, in the order the panel lists them
+local ARMOR_TYPES = { "physical", "explosion", "acid", "fire" }
+
+-- Fills a flow with one line per damage type the wagon's plates protect against.
+local function show_armor(flow, wagon)
+  flow.clear()
+  local any = false
+  for _, damage_type in pairs(ARMOR_TYPES) do
+    local flat, factor = plating(wagon.grid, damage_type)
+    if flat > 0 or factor < 1 then
+      any = true
+      flow.add({
+        type = "label",
+        caption = {
+          "military-wagons.armor-line",
+          { "damage-type-name." .. damage_type },
+          string.format("%g", flat),
+          string.format("%d", math.floor((1 - factor) * 100 + 0.5)),
+        },
+      })
+    end
+  end
+  if not any then flow.add({ type = "label", caption = { "military-wagons.no-armor" } }) end
+end
+
+-- rig is nil for wagons without roof turrets: then the panel only shows the armour
+local function open_panel(player, wagon, rig)
   close_panel(player)
-  local kind = KINDS[rig.kind]
+  local kind = rig and KINDS[rig.kind]
   local frame = player.gui.relative.add({
     type = "frame",
     name = PANEL,
@@ -422,10 +513,16 @@ local function open_panel(player, rig)
     anchor = {
       gui = defines.relative_gui_type.train_gui,
       position = defines.relative_gui_position.right,
-      names = WAGON_NAMES,
+      names = ARMORED_NAMES,
     },
   })
   local inner = frame.add({ type = "frame", style = "inside_shallow_frame_with_padding", direction = "vertical" })
+  inner.add({ type = "label", caption = { "military-wagons.armor" }, style = "caption_label" })
+  local open = { wagon = wagon, circles = {}, armor = inner.add({ type = "flow", direction = "vertical" }) }
+  show_armor(open.armor, wagon)
+  storage.panels[player.index] = open
+  if not rig then return end
+  inner.add({ type = "line" })
   inner.add({ type = "label", caption = { "military-wagons.targets" }, style = "caption_label" })
   local slots = inner.add({ type = "table", column_count = 4 })
   for slot = 1, config.priority_slots do
@@ -443,7 +540,6 @@ local function open_panel(player, rig)
     state = rig.ignore or false,
     tags = { military_wagons = "ignore" },
   })
-  local open = { wagon = rig.wagon, circles = {} }
   if kind.min_ranges then
     local ranges = kind.min_ranges
     local range = rig.min_range or ranges[1]
@@ -474,7 +570,6 @@ local function open_panel(player, rig)
       })
     end
   end
-  storage.panels[player.index] = open
 end
 
 -- The rig a player's panel belongs to, if the wagon is still there.
@@ -488,14 +583,22 @@ end
 
 local function on_gui_opened(event)
   local wagon = event.entity
-  if not (wagon and wagon.valid and KINDS[wagon.name]) then return end
-  local rig = storage.rigs[wagon.unit_number] or create_rig(wagon)
-  open_panel(game.get_player(event.player_index), rig)
+  if not (wagon and wagon.valid and ARMORED[wagon.name]) then return end
+  local rig = KINDS[wagon.name] and (storage.rigs[wagon.unit_number] or create_rig(wagon))
+  open_panel(game.get_player(event.player_index), wagon, rig)
 end
 
 local function on_gui_closed(event)
   local wagon = event.entity
-  if wagon and wagon.valid and KINDS[wagon.name] then close_panel(game.get_player(event.player_index)) end
+  if wagon and wagon.valid and ARMORED[wagon.name] then close_panel(game.get_player(event.player_index)) end
+end
+
+-- Plates built in or taken out while the wagon window is open.
+local function on_equipment_changed(event)
+  local open = storage.panels[event.player_index]
+  if open and open.wagon.valid and open.armor.valid and open.wagon.grid == event.grid then
+    show_armor(open.armor, open.wagon)
+  end
 end
 
 local function on_elem_changed(event)
@@ -533,63 +636,6 @@ local function on_settings_pasted(event)
   target.ignore = source.ignore
   set_targets(target)
   if KINDS[to.name].min_ranges then set_min_range(target, source.min_range or KINDS[to.name].min_ranges[1]) end
-end
-
--- Armour plates. Equipment cannot give a vehicle resistances, so the plates' share
--- is healed back right after a hit. A hit asks the grid only for the plates that
--- resist its damage type; there is nothing to keep track of when plates come and go.
-
--- PLATES[damage type] = { { name, flat, factor }, ... }
-local PLATES = {}
-for _, plate in pairs(config.plates) do
-  -- the tungsten plates exist only with Space Age
-  for damage_type, r in pairs(prototypes.equipment[plate.name] and plate.resistances or {}) do
-    PLATES[damage_type] = PLATES[damage_type] or {}
-    table.insert(PLATES[damage_type], { name = plate.name, flat = r[1], factor = 1 - r[2] / 100 })
-  end
-end
-local FLOOR = 1 - config.armor_cap / 100
-
--- Factorio's resistance formula: flat first, then percent; a hit never does nothing.
-local function resist(damage, flat, factor)
-  if damage > flat then return (damage - flat) * factor end
-  return factor / (2 + flat - damage)
-end
-
--- storage.health[wagon unit number] = health after the last hit. A lethal hit leaves the
--- wagon at 0 health without saying how much it had, so that comes from here. Repairs
--- since then only make it an underestimate: then the plates save a little less.
-
-local function on_damaged(event)
-  local wagon = event.entity
-  if not wagon.valid then return end
-  local id = wagon.unit_number
-  local before = storage.health[id]
-  if not before then script.register_on_object_destroyed(wagon) end
-  storage.health[id] = event.final_health
-  local plates = PLATES[event.damage_type.name]
-  local grid = wagon.grid
-  if not (plates and grid) then return end
-  local flat, factor = 0, 1
-  for _, plate in pairs(plates) do
-    local n = grid.count(plate.name)
-    if n > 0 then
-      flat = flat + n * plate.flat
-      factor = factor * plate.factor ^ n
-    end
-  end
-  if flat == 0 and factor == 1 then return end
-  local damage = event.final_damage_amount
-  local armored = resist(damage, flat, math.max(factor, FLOOR))
-  local health = event.final_health + damage - armored
-  if event.final_health <= 0 then
-    -- killed: what it had before the hit, as far as known, minus the armoured damage
-    health = math.min(before or wagon.max_health, damage) - armored
-  end
-  if health > 0 then
-    wagon.health = health
-    storage.health[id] = wagon.health
-  end
 end
 
 -- Rebuilds the bookkeeping from the map: rigs for every wagon, no orphaned turrets.
@@ -653,8 +699,6 @@ if next(WAGON_NAMES) then
   }) do
     script.on_event(e, on_mined, filter)
   end
-  script.on_event(defines.events.on_gui_opened, on_gui_opened)
-  script.on_event(defines.events.on_gui_closed, on_gui_closed)
   script.on_event(defines.events.on_gui_elem_changed, on_elem_changed)
   script.on_event(defines.events.on_gui_checked_state_changed, on_checked)
   script.on_event(defines.events.on_gui_value_changed, on_value_changed)
@@ -666,6 +710,10 @@ if next(ARMORED_NAMES) then
     filter[#filter + 1] = { filter = "name", name = name }
   end
   script.on_event(defines.events.on_entity_damaged, on_damaged, filter)
+  script.on_event(defines.events.on_gui_opened, on_gui_opened)
+  script.on_event(defines.events.on_gui_closed, on_gui_closed)
+  script.on_event(defines.events.on_player_placed_equipment, on_equipment_changed)
+  script.on_event(defines.events.on_player_removed_equipment, on_equipment_changed)
 end
 script.on_event(defines.events.on_object_destroyed, on_destroyed)
 script.on_nth_tick(REFILL_INTERVAL, on_refill)

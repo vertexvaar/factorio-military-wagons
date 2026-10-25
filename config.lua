@@ -91,6 +91,8 @@ config.armor_cap = 80
 -- config.shell_prefix .. original and loaded from the original shells in the cargo.
 config.shell_category = "military-wagons-cannon-shell"
 config.shell_prefix = "military-wagons-"
+-- how far the shell copies fly: tank shells stop at 30, the howitzer reaches 36
+config.shell_range = 40
 config.grid = "military-wagon-equipment-grid"
 config.armor_category = "military-wagon-armor"
 
