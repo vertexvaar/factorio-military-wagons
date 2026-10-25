@@ -193,7 +193,8 @@ end
 
 -- Ammo / fluid supply -------------------------------------------------------
 
-local turret_accepts = {} -- [wagon name][item name or fluid name] = true, filled lazily
+-- [wagon name][item or fluid name in the wagon] = the item or fluid the turret takes for it, filled lazily
+local turret_accepts = {}
 
 local function accepted(kind)
   if turret_accepts[kind.name] then return turret_accepts[kind.name] end
@@ -203,7 +204,7 @@ local function accepted(kind)
   if kind.fluid then
     for _, f in pairs(params.fluids or {}) do
       local name = type(f.type) == "string" and f.type or f.type.name
-      accepts[name] = true
+      accepts[name] = name
     end
   else
     local categories = {}
@@ -212,7 +213,11 @@ local function accepted(kind)
     end
     for name, item in pairs(prototypes.get_item_filtered({ { filter = "type", type = "ammo" } })) do
       local category = item.ammo_category
-      if category and categories[category.name] then accepts[name] = true end
+      if category and categories[category.name] then
+        -- a shell copy is loaded from the original in the cargo
+        local original = category.name == config.shell_category and name:sub(#config.shell_prefix + 1)
+        accepts[original and prototypes.item[original] and original or name] = name
+      end
     end
   end
   return accepts
@@ -228,10 +233,9 @@ local function refill_ammo(rig, kind)
     if need > 0 then
       local loaded = ammo[1].valid_for_read and ammo[1]
       for _, stack in pairs(cargo.get_contents()) do
-        if
-          accepts[stack.name] and (not loaded or (loaded.name == stack.name and loaded.quality.name == stack.quality))
-        then
-          local moved = ammo.insert({ name = stack.name, quality = stack.quality, count = math.min(need, stack.count) })
+        local load = accepts[stack.name]
+        if load and (not loaded or (loaded.name == load and loaded.quality.name == stack.quality)) then
+          local moved = ammo.insert({ name = load, quality = stack.quality, count = math.min(need, stack.count) })
           if moved > 0 then
             cargo.remove({ name = stack.name, quality = stack.quality, count = moved })
             need = need - moved
@@ -313,6 +317,13 @@ local function on_built(event)
   if wagon and wagon.valid and KINDS[wagon.name] then create_rig(wagon) end
 end
 
+-- The original of a shell copy, or the item itself.
+local function original_item(name)
+  if name:sub(1, #config.shell_prefix) ~= config.shell_prefix then return name end
+  local original = name:sub(#config.shell_prefix + 1)
+  return prototypes.item[original] and original or name
+end
+
 -- Mined wagons give back the ammo that sat in their turrets.
 local function on_mined(event)
   local wagon = event.entity
@@ -322,7 +333,13 @@ local function on_mined(event)
     for _, turret in pairs(rig.turrets) do
       local ammo = turret.get_inventory(defines.inventory.turret_ammo)
       for i = 1, #ammo do
-        if ammo[i].valid_for_read then event.buffer.insert(ammo[i]) end
+        local stack = ammo[i]
+        if stack.valid_for_read then
+          local original = original_item(stack.name)
+          event.buffer.insert(
+            original == stack.name and stack or { name = original, quality = stack.quality, count = stack.count }
+          )
+        end
       end
     end
   end

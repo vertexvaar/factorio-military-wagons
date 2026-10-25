@@ -17,25 +17,59 @@ if data.raw["artillery-flare"]["mine-launcher-flare"] then
   if flare and not flare.shot_category then flare.shot_category = "artillery-shell" end
 end
 
--- Tank shells are projectiles that hit whatever they cross, also on their own side. From a
--- wagon turret a shell starts inside its own train whenever the target lies ahead or
--- behind, so the cannon wagons would shoot themselves. Shells pass their own side instead
--- (this applies to the tank as well).
+-- Cannon wagon turrets fire copies of every tank shell that pass their own side (see
+-- config.shell_category). The tank and its shells stay as they are.
 if data.raw["ammo-turret"]["twin-cannon-wagon-turret"] or data.raw["ammo-turret"]["howitzer-wagon-turret"] then
-  local function projectiles(node, found)
+  data:extend({ { type = "ammo-category", name = config.shell_category, hidden = true } })
+
+  -- points every projectile in an ammo type at its copy, made on first use
+  local function own_side(node)
     if type(node) ~= "table" then return end
-    if node.type == "projectile" and node.projectile then found[node.projectile] = true end
+    if node.type == "projectile" and node.projectile then
+      local copy = config.shell_prefix .. node.projectile
+      if not data.raw["projectile"][copy] and data.raw["projectile"][node.projectile] then
+        local projectile = table.deepcopy(data.raw["projectile"][node.projectile])
+        projectile.name = copy
+        projectile.force_condition = "not-same"
+        data:extend({ projectile })
+      end
+      node.projectile = copy
+    end
     for _, child in pairs(node) do
-      projectiles(child, found)
+      own_side(child)
     end
   end
-  local found = {}
-  for _, ammo in pairs(data.raw["ammo"]) do
-    local category = ammo.ammo_category or (ammo.ammo_type and ammo.ammo_type.category)
-    if category == "cannon-shell" then projectiles(ammo.ammo_type, found) end
+
+  local shells = {}
+  for name, ammo in pairs(data.raw["ammo"]) do
+    if ammo.ammo_category == "cannon-shell" then shells[#shells + 1] = ammo end
   end
-  for name in pairs(found) do
-    local projectile = data.raw["projectile"][name]
-    if projectile then projectile.force_condition = "not-same" end
+  for _, ammo in pairs(shells) do
+    local copy = table.deepcopy(ammo)
+    copy.name = config.shell_prefix .. ammo.name
+    copy.localised_name = ammo.localised_name or { "item-name." .. ammo.name }
+    copy.localised_description = ammo.localised_description or { "item-description." .. ammo.name }
+    copy.ammo_category = config.shell_category
+    copy.hidden = true
+    copy.hidden_in_factoriopedia = true
+    copy.auto_recycle = false
+    own_side(copy.ammo_type)
+    data:extend({ copy })
+  end
+
+  -- research that improves cannon shells improves the copies too
+  for _, technology in pairs(data.raw["technology"]) do
+    local added = {}
+    for _, effect in pairs(technology.effects or {}) do
+      if (effect.type == "ammo-damage" or effect.type == "gun-speed") and effect.ammo_category == "cannon-shell" then
+        local copy = table.deepcopy(effect)
+        copy.ammo_category = config.shell_category
+        copy.hidden = true
+        added[#added + 1] = copy
+      end
+    end
+    for _, effect in pairs(added) do
+      table.insert(technology.effects, effect)
+    end
   end
 end

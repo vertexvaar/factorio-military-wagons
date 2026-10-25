@@ -1,4 +1,5 @@
 local rig = require("prototypes.rig")
+local wagon_config = require("config")
 local graphics = require("prototypes.graphics")
 
 -- The tank's turret graphics, without the layers tinted in the player colour.
@@ -80,6 +81,9 @@ return function(config)
   local tank = data.raw["car"]["tank"]
   local cannon = data.raw["gun"]["tank-cannon"]
   turret.attack_parameters = table.deepcopy(cannon.attack_parameters)
+  -- the shell copies made in data-final-fixes.lua
+  turret.attack_parameters.ammo_category = wagon_config.shell_category
+  turret.attack_parameters.ammo_categories = nil
   turret.attack_parameters.turn_range = 1
   turret.attack_parameters.range = kind.range or turret.attack_parameters.range
   turret.attack_parameters.min_range = kind.min_range

@@ -85,6 +85,12 @@ config.plates = {
   },
 }
 config.armor_cap = 80
+
+-- Wagon turrets fire their own copies of the tank shells, which pass their own side:
+-- from a turret on a train, a shell starts among its own wagons. The copies are named
+-- config.shell_prefix .. original and loaded from the original shells in the cargo.
+config.shell_category = "military-wagons-cannon-shell"
+config.shell_prefix = "military-wagons-"
 config.grid = "military-wagon-equipment-grid"
 config.armor_category = "military-wagon-armor"
 

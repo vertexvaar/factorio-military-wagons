@@ -77,7 +77,9 @@ local function load_of(entity)
   local inv = entity.get_inventory(
     entity.type == "cargo-wagon" and defines.inventory.cargo_wagon or defines.inventory.turret_ammo
   )
-  return inv.get_item_count(SPEC.ammo)
+  -- cannon turrets hold the mod's copy of the shell, which passes its own side
+  local copy = "military-wagons-" .. SPEC.ammo
+  return inv.get_item_count(SPEC.ammo) + (prototypes.item[copy] and inv.get_item_count(copy) or 0)
 end
 
 local function mount(wagon, offset)
@@ -354,6 +356,15 @@ local function setup()
     )
     local tungsten = prototypes.equipment["tungsten-reactive-armor-plate"] ~= nil
     report(tungsten == (script.active_mods["space-age"] ~= nil), "tungsten plates only with Space Age")
+  end
+
+  -- the tank's own shells still hit their own side; only the wagon copies pass it
+  if prototypes.item["military-wagons-cannon-shell"] then
+    report(
+      prototypes.item["military-wagons-cannon-shell"].ammo_category.name == "military-wagons-cannon-shell"
+        and prototypes.item["cannon-shell"].ammo_category.name == "cannon-shell",
+      "cannon wagons fire their own copies of the tank shells"
+    )
   end
 
   -- I: mine launcher, whenever it is switched on: throws a mine only at its own flare
