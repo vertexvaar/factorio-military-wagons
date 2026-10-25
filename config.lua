@@ -40,6 +40,14 @@ config.wagons = {
     mounts = { -1.6, 1.6 },
     refill = 10,
   },
+  {
+    name = "howitzer-wagon",
+    turret = "howitzer-wagon-turret",
+    variant = "howitzer",
+    fluid = false,
+    mounts = { 0 },
+    refill = 10,
+  },
 }
 
 -- How many entries a wagon's target priority list has.
