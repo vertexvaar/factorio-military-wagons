@@ -120,6 +120,34 @@ local function setup()
       )
     end
   end
+  -- armour steel: 4 steel, 1 copper, 2 carbon, 20 water, quenched to steam
+  local recipe = prototypes.recipe["armor-steel"]
+  local amounts = {}
+  for _, i in pairs(recipe and recipe.ingredients or {}) do
+    amounts[i.name] = i.amount
+  end
+  report(
+    amounts["steel-plate"] == 4 and amounts["copper-plate"] == 1 and amounts["carbon"] == 2 and amounts["water"] == 20,
+    "armor steel recipe ingredients",
+    serpent.line(amounts)
+  )
+  local steam = false
+  for _, p in pairs(recipe and recipe.products or {}) do
+    steam = steam or p.name == "steam"
+  end
+  report(steam, "armor steel recipe gives off steam")
+  local unlocks = {}
+  for _, effect in pairs(prototypes.technology["armor-steel"].effects) do
+    if effect.type == "unlock-recipe" then unlocks[effect.recipe] = true end
+  end
+  report(unlocks["armor-steel"], "armor steel technology unlocks the recipe")
+  -- carbon comes from Space Age if present, otherwise from our coal recipe
+  local own_carbon = prototypes.recipe["military-wagons-carbon"] ~= nil
+  report(
+    own_carbon ~= (script.active_mods["space-age"] ~= nil)
+      and (own_carbon == (unlocks["military-wagons-carbon"] == true)),
+    "carbon recipe only without Space Age"
+  )
   local surface = game.surfaces.nauvis
   game.map_settings.enemy_expansion.enabled = false
   surface.request_to_generate_chunks({ 0, 0 }, 6)
