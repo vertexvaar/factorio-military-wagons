@@ -78,10 +78,15 @@ local function mount(wagon, offset)
   return draw.x + math.sin(a) * offset, draw.y - math.cos(a) * offset * math.sin(math.rad(50))
 end
 
-local function mounts()
-  if SPEC.mounts == 2 then return { -1.5, 1.5 } end
-  return { -1.9, 0, 1.9 }
-end
+-- the mount offsets in config.lua
+local MOUNTS = {
+  ["gun-turret-wagon"] = { -1.9, 0, 1.9 },
+  ["flamethrower-turret-wagon"] = { -1.5, 1.5 },
+  ["rocket-turret-wagon"] = { -1.5, 1.5 },
+  ["twin-cannon-wagon"] = { -1.6, 1.6 },
+  ["howitzer-wagon"] = { 0 },
+}
+local function mounts() return MOUNTS[MOD] end
 
 -- How far the turrets are from their mounts; positions defaults to where they are now.
 local function deviation(wagon, positions)
@@ -213,7 +218,8 @@ local function setup()
     report(turrets(s.a)[1].name == TURRET, "minimum range back to 8 gives the plain turret", turrets(s.a)[1].name)
   end
   remote.call("military-wagons", "configure", s.a, { targets = {} })
-  report(turrets(s.a)[1].get_priority_target(1) == nil, "target priorities can be cleared")
+  -- reading past the end of the priority list is an error
+  report(#turrets(s.a)[1].priority_targets == 0, "target priorities can be cleared")
 
   -- B: moving train with enemies along the track
   rail_line(surface, false, -81, -151, 151)
