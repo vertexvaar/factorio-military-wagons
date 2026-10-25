@@ -105,6 +105,9 @@ return function(config)
   -- start where the tank starts them, near the turret's foot, not up at the drawn barrel:
   -- lifted, they would start north of the wagon and fly through it at targets to the south.
   turret.attack_parameters.projectile_center = table.deepcopy(cannon.attack_parameters.projectile_center)
+  -- the tank starts shells 1.6 tiles out, past enemies that gnaw at the wagon; shells pass
+  -- the own side (data-final-fixes.lua), so they can start at the turret
+  turret.attack_parameters.projectile_creation_distance = 0.3
 
   data:extend({
     wagon,
