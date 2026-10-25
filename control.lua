@@ -14,20 +14,25 @@ local FORESHORTEN = rigging.FORESHORTEN
 ---@class Kind one entry of config.wagons, plus:
 ---@field sink_steps integer
 
--- KINDS[wagon name] = Kind, only the wagons switched on in the startup settings
+-- KINDS[wagon name] = Kind, only the turret wagons switched on in the startup settings
 local KINDS = {}
 local WAGON_NAMES = {}
 -- every turret prototype of every kind, to find orphans
 local TURRET_NAMES = {}
+-- every wagon switched on, also those without roof turrets (they get armour too)
+local ARMORED_NAMES = {}
 for _, kind in pairs(config.enabled()) do
-  kind.sink_steps = rigging.sink_steps(kind.mounts)
-  KINDS[kind.name] = kind
-  WAGON_NAMES[#WAGON_NAMES + 1] = kind.name
-  for _, range in pairs(kind.min_ranges or { false }) do
-    local name = range and rigging.range_name(kind.turret, range, kind.min_ranges) or kind.turret
-    TURRET_NAMES[#TURRET_NAMES + 1] = name .. "-elevated"
-    for k = 0, kind.sink_steps do
-      TURRET_NAMES[#TURRET_NAMES + 1] = rigging.sink_name(name, k)
+  ARMORED_NAMES[#ARMORED_NAMES + 1] = kind.name
+  if #kind.mounts > 0 then
+    kind.sink_steps = rigging.sink_steps(kind.mounts)
+    KINDS[kind.name] = kind
+    WAGON_NAMES[#WAGON_NAMES + 1] = kind.name
+    for _, range in pairs(kind.min_ranges or { false }) do
+      local name = range and rigging.range_name(kind.turret, range, kind.min_ranges) or kind.turret
+      TURRET_NAMES[#TURRET_NAMES + 1] = name .. "-elevated"
+      for k = 0, kind.sink_steps do
+        TURRET_NAMES[#TURRET_NAMES + 1] = rigging.sink_name(name, k)
+      end
     end
   end
 end
@@ -612,13 +617,19 @@ if next(WAGON_NAMES) then
   }) do
     script.on_event(e, on_mined, filter)
   end
-  script.on_event(defines.events.on_entity_damaged, on_damaged, filter)
   script.on_event(defines.events.on_gui_opened, on_gui_opened)
   script.on_event(defines.events.on_gui_closed, on_gui_closed)
   script.on_event(defines.events.on_gui_elem_changed, on_elem_changed)
   script.on_event(defines.events.on_gui_checked_state_changed, on_checked)
   script.on_event(defines.events.on_gui_value_changed, on_value_changed)
   script.on_event(defines.events.on_entity_settings_pasted, on_settings_pasted)
+end
+if next(ARMORED_NAMES) then
+  local filter = {}
+  for _, name in pairs(ARMORED_NAMES) do
+    filter[#filter + 1] = { filter = "name", name = name }
+  end
+  script.on_event(defines.events.on_entity_damaged, on_damaged, filter)
 end
 script.on_event(defines.events.on_object_destroyed, on_destroyed)
 script.on_nth_tick(REFILL_INTERVAL, on_refill)

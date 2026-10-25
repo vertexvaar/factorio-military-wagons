@@ -315,6 +315,39 @@ local function setup()
     report(math.abs(h.health - 933.5) < 0.01, "removed plate stops protecting", string.format("%.2f", h.health))
   end
 
+  -- I: mine launcher, whenever it is switched on: throws a mine only at its own flare
+  if prototypes.entity["mine-launcher-wagon"] then
+    rail_line(surface, true, -141, -41, 41)
+    s.mine = surface.create_entity({
+      name = "mine-launcher-wagon",
+      force = "player",
+      direction = defines.direction.north,
+      position = { -141, 0 },
+      raise_built = true,
+    })
+    s.mine.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 5 })
+    report(s.mine.grid ~= nil, "mine launcher has an equipment grid")
+    surface.create_entity({
+      name = "mine-launcher-flare",
+      position = { -111, 10 },
+      force = "player",
+      movement = { 0, 0 },
+      height = 0,
+      vertical_speed = 0,
+      frame_speed = 0,
+    })
+    -- a plain artillery flare, which the launcher must leave alone
+    surface.create_entity({
+      name = "artillery-flare",
+      position = { -111, -10 },
+      force = "player",
+      movement = { 0, 0 },
+      height = 0,
+      vertical_speed = 0,
+      frame_speed = 0,
+    })
+  end
+
   -- an empty wagon must not do anything bad
   rail_line(surface, true, -101, -41, 41)
   s.empty = train(surface, true, -101, 0)
@@ -446,6 +479,13 @@ script.on_event(defines.events.on_tick, function()
     end
     local count = s.surface.count_entities_filtered({ name = names })
     report(count == expected, "no orphaned turrets", count .. " turrets, " .. expected .. " expected")
+    if s.mine then
+      local at_flare = s.surface.count_entities_filtered({ name = "land-mine", position = { -111, 10 }, radius = 4 })
+      local at_artillery =
+        s.surface.count_entities_filtered({ name = "land-mine", position = { -111, -10 }, radius = 4 })
+      report(at_flare == 1, "mine launcher throws one mine at its flare", at_flare .. " mines")
+      report(at_artillery == 0, "mine launcher ignores artillery flares", at_artillery .. " mines")
+    end
     log("WAGONTEST DONE")
   end
 end)

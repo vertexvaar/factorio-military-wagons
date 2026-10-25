@@ -9,3 +9,10 @@ if tank_grid then
     if category ~= config.armor_category then table.insert(grid.equipment_categories, category) end
   end
 end
+
+-- Mine launchers answer only their own remote's flares, so the artillery remote's
+-- flares must not call them: those are for artillery shells.
+if data.raw["artillery-flare"]["mine-launcher-flare"] then
+  local flare = data.raw["artillery-flare"]["artillery-flare"]
+  if flare and not flare.shot_category then flare.shot_category = "artillery-shell" end
+end

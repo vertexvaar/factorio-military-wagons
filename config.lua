@@ -48,6 +48,12 @@ config.wagons = {
     mounts = { 0 },
     refill = 10,
   },
+  -- an artillery wagon that throws mines where the remote points; no roof turrets
+  {
+    name = "mine-launcher-wagon",
+    variant = "mine",
+    mounts = {},
+  },
 }
 
 -- How many entries a wagon's target priority list has.
