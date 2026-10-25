@@ -1,0 +1,8 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.1.0
+Date: 2026-10-25
+  Features:
+    - Machine gun, flamethrower and rocket wagon in one mod. They used to be three separate mods (up to version 0.2.1).
+    - Each wagon can be switched off in the startup settings.
+  Info:
+    - The wagons keep their names, so saves with the old mods keep their wagons. The old mods become empty bridges to this one.

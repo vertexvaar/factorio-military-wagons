@@ -1,0 +1,10 @@
+{
+  "name": "military-wagons",
+  "version": "0.1.0",
+  "title": "Military Wagons",
+  "author": "vertexvaar",
+  "homepage": "https://github.com/vertexvaar/factorio-military-wagons",
+  "factorio_version": "2.1",
+  "description": "Armoured train wagons with turrets on their roof: machine guns, flamethrowers and rocket launchers. They also fire while the train is moving. Each wagon can be switched off in the startup settings.",
+  "dependencies": ["base >= 2.1.0", "? space-age"]
+}
