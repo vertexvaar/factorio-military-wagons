@@ -84,8 +84,6 @@ return function(config)
   turret.attack_parameters.range = kind.range or turret.attack_parameters.range
   turret.attack_parameters.min_range = kind.min_range
   turret.attack_parameters.cooldown = turret.attack_parameters.cooldown * (kind.cooldown_factor or 1)
-  -- the tank fires from near the ground; here shells leave the barrel, at turret height
-  turret.attack_parameters.projectile_center = { 0, -1.2 }
   turret.prepare_range = turret.attack_parameters.range + 4
   -- turret_rotation_speed is in turns per tick, like rotation_speed
   turret.rotation_speed = kind.rotation_speed or tank.turret_rotation_speed
@@ -103,6 +101,10 @@ return function(config)
   turret.folding_sound = nil
   -- the tank turret already sits at tank roof height; the wagon deck is higher
   rig.lift_turret(turret, -0.55)
+  -- Shells are real projectiles that hit whatever they cross, the own wagon too. They
+  -- start where the tank starts them, near the turret's foot, not up at the drawn barrel:
+  -- lifted, they would start north of the wagon and fly through it at targets to the south.
+  turret.attack_parameters.projectile_center = table.deepcopy(cannon.attack_parameters.projectile_center)
 
   data:extend({
     wagon,

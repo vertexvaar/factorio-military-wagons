@@ -465,6 +465,11 @@ script.on_event(defines.events.on_tick, function()
   end
   if age == 1300 then
     report(alive(s.a_enemies) == 0, "standing train kills nearby enemies", alive(s.a_enemies) .. " left")
+    report(s.a.valid and s.a_loco.valid, "standing train is still there after the fight")
+    if not (s.a.valid and s.a_loco.valid) then
+      log("WAGONTEST DONE")
+      return
+    end
     report(
       s.a.health > s.a.max_health * 0.9,
       "wagon survives the fight",
