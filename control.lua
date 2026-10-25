@@ -331,6 +331,7 @@ local function on_mined(event)
 end
 
 local function on_destroyed(event)
+  if event.type == defines.target_type.entity then storage.health[event.useful_id] = nil end
   if event.type == defines.target_type.entity and storage.rigs[event.useful_id] then
     destroy_rig(event.useful_id)
     update_tick_handler()
@@ -537,12 +538,20 @@ local function resist(damage, flat, factor)
   return factor / (2 + flat - damage)
 end
 
+-- storage.health[wagon unit number] = health after the last hit. A lethal hit leaves the
+-- wagon at 0 health without saying how much it had, so that comes from here. Repairs
+-- since then only make it an underestimate: then the plates save a little less.
+
 local function on_damaged(event)
-  local plates = PLATES[event.damage_type.name]
   local wagon = event.entity
-  if not plates or not wagon.valid then return end
+  if not wagon.valid then return end
+  local id = wagon.unit_number
+  local before = storage.health[id]
+  if not before then script.register_on_object_destroyed(wagon) end
+  storage.health[id] = event.final_health
+  local plates = PLATES[event.damage_type.name]
   local grid = wagon.grid
-  if not grid then return end
+  if not (plates and grid) then return end
   local flat, factor = 0, 1
   for _, plate in pairs(plates) do
     local n = grid.count(plate.name)
@@ -553,14 +562,23 @@ local function on_damaged(event)
   end
   if flat == 0 and factor == 1 then return end
   local damage = event.final_damage_amount
-  local heal = damage - resist(damage, flat, math.max(factor, FLOOR))
-  if heal > 0 then wagon.health = event.final_health + heal end
+  local armored = resist(damage, flat, math.max(factor, FLOOR))
+  local health = event.final_health + damage - armored
+  if event.final_health <= 0 then
+    -- killed: what it had before the hit, as far as known, minus the armoured damage
+    health = math.min(before or wagon.max_health, damage) - armored
+  end
+  if health > 0 then
+    wagon.health = health
+    storage.health[id] = wagon.health
+  end
 end
 
 -- Rebuilds the bookkeeping from the map: rigs for every wagon, no orphaned turrets.
 local function rebuild()
   storage.rigs = storage.rigs or {}
   storage.panels = storage.panels or {}
+  storage.health = storage.health or {}
   for id, rig in pairs(storage.rigs) do
     local kind = KINDS[rig.kind]
     local complete = rig.wagon.valid and kind and #rig.turrets == #kind.mounts

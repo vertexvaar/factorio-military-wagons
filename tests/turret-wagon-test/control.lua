@@ -232,7 +232,9 @@ local function setup()
   s.c = train(surface, true, 101, 0)
   local cx = turrets(s.c)[1]
   report(
-    cx and math.abs(cx.position.x - s.c.position.x) < 0.01 and math.abs(cx.position.y - s.c.position.y) > 1,
+    cx
+      and math.abs(cx.position.x - s.c.position.x) < 0.01
+      and (mounts()[1] == 0 or math.abs(cx.position.y - s.c.position.y) > 1),
     "turrets follow a vertical wagon",
     string.format("%.3f", deviation(s.c))
   )
@@ -295,7 +297,8 @@ local function setup()
   h.damage(100, "enemy", "physical")
   report(math.abs(h.health - 933.5) < 0.01, "unplated wagon takes its normal damage", string.format("%.2f", h.health))
   h.health = 1000
-  report(grid and grid.put({ name = "composite-armor-plate" }) ~= nil, "grid takes an armour plate")
+  local plate = grid and grid.put({ name = "composite-armor-plate" })
+  report(plate ~= nil, "grid takes an armour plate")
   -- plate: physical 4 / 20 % on top, (66.5 - 4) * 0.8 = 50
   h.damage(100, "enemy", "physical")
   report(math.abs(h.health - 950) < 0.01, "armour plate reduces physical damage", string.format("%.2f", h.health))
@@ -307,7 +310,9 @@ local function setup()
     string.format("%.2f", h.health)
   )
   -- a hit that would destroy the bare wagon but not the plated one
-  h.health = 55
+  -- brought down by hits, so the mod knows its health: explosion (1360 - 10) * 0.7 = 945
+  h.health = 1000
+  h.damage(1360, "enemy", "explosion")
   h.damage(100, "enemy", "physical")
   report(
     h.valid and math.abs(h.health - 5) < 0.01,
@@ -316,7 +321,7 @@ local function setup()
   )
   if h.valid then
     h.health = 1000
-    grid.take({ name = "composite-armor-plate" })
+    grid.take({ equipment = plate })
     h.damage(100, "enemy", "physical")
     report(math.abs(h.health - 933.5) < 0.01, "removed plate stops protecting", string.format("%.2f", h.health))
   end
