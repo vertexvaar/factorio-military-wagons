@@ -306,16 +306,23 @@ local function setup()
   h.damage(100, "enemy", "physical")
   report(math.abs(h.health - 933.5) < 0.01, "unplated wagon takes its normal damage", string.format("%.2f", h.health))
   h.health = 1000
-  local plate = grid and grid.put({ name = "composite-armor-plate" })
-  report(plate ~= nil, "grid takes an armour plate")
-  -- plate: physical 4 / 20 % on top, (66.5 - 4) * 0.8 = 50
+  -- four composite plates: physical 4 / 1 - 0.95^4 on top, (66.5 - 4) * 0.95^4 = 50.907
+  local plates = {}
+  for k = 1, 4 do
+    plates[k] = grid and grid.put({ name = "composite-armor-plate" })
+  end
+  report(plates[4] ~= nil, "grid takes four armour plates")
   h.damage(100, "enemy", "physical")
-  report(math.abs(h.health - 950) < 0.01, "armour plate reduces physical damage", string.format("%.2f", h.health))
+  report(
+    math.abs(h.health - (1000 - 62.5 * 0.95 ^ 4)) < 0.01,
+    "armour plates reduce physical damage",
+    string.format("%.2f", h.health)
+  )
   h.health = 1000
   h.damage(100, "enemy", "explosion")
   report(
     math.abs(h.health - 937) < 0.01,
-    "armour plate leaves other damage types alone",
+    "armour plates leave other damage types alone",
     string.format("%.2f", h.health)
   )
   -- a hit that would destroy the bare wagon but not the plated one
@@ -324,15 +331,29 @@ local function setup()
   h.damage(1360, "enemy", "explosion")
   h.damage(100, "enemy", "physical")
   report(
-    h.valid and math.abs(h.health - 5) < 0.01,
-    "armour plate catches a hit that would be lethal",
+    h.valid and math.abs(h.health - (55 - 62.5 * 0.95 ^ 4)) < 0.01,
+    "armour plates catch a hit that would be lethal",
     h.valid and string.format("%.2f", h.health) or "destroyed"
   )
   if h.valid then
     h.health = 1000
-    grid.take({ equipment = plate })
+    for _, plate in pairs(plates) do
+      grid.take({ equipment = plate })
+    end
     h.damage(100, "enemy", "physical")
-    report(math.abs(h.health - 933.5) < 0.01, "removed plate stops protecting", string.format("%.2f", h.health))
+    report(math.abs(h.health - 933.5) < 0.01, "removed plates stop protecting", string.format("%.2f", h.health))
+    -- two reactive plates: explosion (63 - 6) * 0.94^2 = 50.37
+    h.health = 1000
+    grid.put({ name = "reactive-armor-plate" })
+    grid.put({ name = "reactive-armor-plate" })
+    h.damage(100, "enemy", "explosion")
+    report(
+      math.abs(h.health - (1000 - 57 * 0.94 ^ 2)) < 0.01,
+      "reactive plates reduce explosion damage",
+      string.format("%.2f", h.health)
+    )
+    local tungsten = prototypes.equipment["tungsten-reactive-armor-plate"] ~= nil
+    report(tungsten == (script.active_mods["space-age"] ~= nil), "tungsten plates only with Space Age")
   end
 
   -- I: mine launcher, whenever it is switched on: throws a mine only at its own flare

@@ -525,7 +525,8 @@ end
 -- PLATES[damage type] = { { name, flat, factor }, ... }
 local PLATES = {}
 for _, plate in pairs(config.plates) do
-  for damage_type, r in pairs(plate.resistances) do
+  -- the tungsten plates exist only with Space Age
+  for damage_type, r in pairs(prototypes.equipment[plate.name] and plate.resistances or {}) do
     PLATES[damage_type] = PLATES[damage_type] or {}
     table.insert(PLATES[damage_type], { name = plate.name, flat = r[1], factor = 1 - r[2] / 100 })
   end

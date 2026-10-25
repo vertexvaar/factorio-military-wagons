@@ -63,9 +63,25 @@ config.priority_slots = 8
 -- Several plates: the flat values add up, the percentages apply one after the other
 -- (two times 20 % make 36 %), capped at config.armor_cap.
 config.plates = {
+  { name = "composite-armor-plate", resistances = { physical = { 1, 5 } } },
+  { name = "reactive-armor-plate", resistances = { explosion = { 3, 6 } } },
+  { name = "acid-armor-plate", resistances = { acid = { 1, 6 } } },
+  { name = "fire-armor-plate", resistances = { fire = { 2, 6 } } },
+  -- tungsten plates need Space Age
   {
-    name = "composite-armor-plate",
-    resistances = { physical = { 4, 20 } },
+    name = "tungsten-carbide-armor-plate",
+    resistances = { physical = { 2, 9 }, acid = { 0, 3 }, fire = { 0, 4 } },
+    space_age = true,
+  },
+  {
+    name = "tungsten-reactive-armor-plate",
+    resistances = { explosion = { 6, 10 }, physical = { 0.5, 3 } },
+    space_age = true,
+  },
+  {
+    name = "tungsten-carbide-acid-armor-plate",
+    resistances = { acid = { 2, 12 }, fire = { 0, 4 } },
+    space_age = true,
   },
 }
 config.armor_cap = 80
