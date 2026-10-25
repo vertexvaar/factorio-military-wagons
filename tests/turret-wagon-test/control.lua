@@ -456,6 +456,11 @@ script.on_event(defines.events.on_tick, function()
   end
   if age == 80 then spawn_enemies() end
   if age == 1200 then
+    report(s.b.valid, "moving train survives its own fire")
+    if not s.b.valid then
+      log("WAGONTEST DONE")
+      return
+    end
     report(
       s.b.position.x - s.b_start > 200,
       "test train moved",
