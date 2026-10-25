@@ -105,6 +105,12 @@ return function(config)
   turret.folding_sound = nil
   -- the tank turret already sits at tank roof height; the wagon deck is higher
   rig.lift_turret(turret, -0.55)
+  -- a rendered head of its own (the howitzer's), drawn at its height on the wagon
+  local head = graphics.turret_animation(config.variant)
+  if head then
+    turret.folded_animation = head
+    turret.prepared_animation = table.deepcopy(head)
+  end
   -- Shells are real projectiles that hit whatever they cross, the own wagon too. They
   -- start where the tank starts them, near the turret's foot, not up at the drawn barrel:
   -- lifted, they would start north of the wagon and fly through it at targets to the south.

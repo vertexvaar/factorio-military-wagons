@@ -52,6 +52,22 @@ function graphics.wagon_pictures(variant)
   }
 end
 
+-- RotatedAnimation of a rendered turret head (graphics/<variant>/entity/turret.lua), or nil.
+-- The head is rendered at its height on the wagon, so it needs no lift.
+function graphics.turret_animation(variant)
+  local ok, set = pcall(require, "graphics." .. variant .. ".entity.turret")
+  if not ok or type(set) ~= "table" then return nil end
+  local dir = path(variant)
+  local color = sheet(dir, set.color)
+  local shadow = sheet(dir, set.shadow, { draw_as_shadow = true })
+  for _, layer in pairs({ color, shadow }) do
+    -- the barrel points one way: back is not front
+    layer.back_equals_front = false
+    layer.usage = nil
+  end
+  return { layers = { color, shadow } }
+end
+
 -- Item and entity icon, or nil without renders.
 function graphics.icons(variant, badge)
   if not sprites(variant) then return nil end

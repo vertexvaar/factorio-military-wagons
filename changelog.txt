@@ -1,4 +1,16 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.0
+Date: 2026-10-25
+  Features:
+    - Twin cannon wagon: two tank cannons on the roof, each turning all the way round.
+    - Howitzer wagon: one long gun, range 36, minimum range 12, half the tank's rate of fire.
+    - Mine launcher wagon: lays land mines up to 120 tiles away, aimed with its own remote like artillery. Minimum range 16.
+    - Wagon shells are wagon-only copies of the tank shells: they fly through the own train and on to 40 tiles.
+    - Armour steel (steel, copper, carbon and water in a chemical plant). Without Space Age carbon is made from coal.
+    - Equipment grid on all military wagons (16x16). It takes everything a tank's grid takes, plus armour plates.
+    - Seven armour plates against physical, explosion, acid and fire damage, four of them made of tungsten with Space Age. Plates fit only into military wagons. Their protection adds up to at most 80 %.
+    - Wagon panel next to the wagon window: the armour in effect, target priorities and, on the rocket wagon, the minimum range (8 to 24, with range circles).
+---------------------------------------------------------------------------------------------------
 Version: 0.1.0
 Date: 2026-10-25
   Features:

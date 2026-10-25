@@ -8,6 +8,9 @@ their vanilla counterparts, also while the train is moving, and reload from the 
 | Machine gun wagon | cargo wagon, 10 slots | 3 machine guns | bullet magazines, 10 per gun |
 | Flamethrower wagon | fluid wagon, 25,000 units | 2 flamethrowers, all sides, min. range 2 | crude, heavy or light oil |
 | Rocket wagon | cargo wagon, 10 slots | 2 rocket launchers, range 36, min. range 8 | rockets, 10 per launcher |
+| Twin cannon wagon | cargo wagon, 10 slots | 2 tank cannons, all round | cannon shells |
+| Howitzer wagon | cargo wagon, 10 slots | 1 long gun, range 36, min. range 12, half rate of fire | cannon shells |
+| Mine launcher wagon | artillery wagon | mine launcher, range 120, min. range 16, aimed with its remote | wagon mines (land mine + explosives) |
 
 - Each wagon can be switched off in the startup settings. A switched-off wagon has no entity, recipe or
   technology. Wagons of that kind already on the map are removed when the save is loaded.
@@ -17,6 +20,36 @@ their vanilla counterparts, also while the train is moving, and reload from the 
 - With Space Age the rocket launchers are rocket turrets; without it they have the rocket launcher's stats.
 - Unlocked by "Machine gun wagon" (railway, gun turret), "Flamethrower wagon" (fluid wagon, flamethrower) and
   "Rocket wagon" (railway and rocket turret, or rocketry without Space Age).
+
+## Armour
+
+All military wagons have a 16x16 equipment grid. It takes everything a tank's grid takes, plus armour plates
+(4x4), which fit into military wagons only. Plates are made from armour steel (4 steel, 1 copper, 2 carbon,
+20 water in a chemical plant; without Space Age carbon comes from coal).
+
+| Plate | Protection per plate | Space Age |
+|---|---|---|
+| Composite | physical 1 flat, 5 % | |
+| Reactive | explosion 3 flat, 6 % | |
+| Acid | acid 1 flat, 6 % | |
+| Fire | fire 2 flat, 6 % | |
+| Tungsten carbide | physical 2 / 9 %, acid 3 %, fire 4 % | yes |
+| Tungsten reactive | explosion 6 / 10 %, physical 0.5 / 3 % | yes |
+| Tungsten carbide acid | acid 2 / 12 %, fire 4 % | yes |
+
+Flat values add up, percentages stack multiplicatively, capped at 80 %. Equipment cannot give a vehicle
+resistances, so the script heals the plates' share back after every hit, lethal hits included.
+
+## Wagon panel
+
+Next to the wagon window: the armour in effect per damage type, target priorities for the wagon's turrets,
+and on the rocket wagon the minimum range (8 to 24, range circles shown while the window is open).
+
+## Cannon shells
+
+The cannon wagons fire wagon-only copies of every tank shell. The copies pass the own force's entities, so the
+shells fly through the own train, and keep flying along their line up to 40 tiles. Shells in the wagon's cargo
+are the normal ones; mining the wagon gives them back as normal shells.
 
 ## Moving from the single wagon mods
 
@@ -41,8 +74,10 @@ nothing per tick. Every 30 ticks the turrets are topped up from the wagon. Minin
 
 ## Graphics
 
-    tools/blender/render_all.sh [out_dir] [mg|flame|rocket ...]          # Blender renders, about an hour per wagon
-    python tools/blender/build_sprites.py [out_dir] [mg|flame|rocket ...] # sprite sheets, icons, thumbnail
+    tools/blender/render_all.sh [out_dir] [mg|flame|rocket|twin|howitzer|mine|howitzer-turret ...]  # Blender renders
+    python tools/blender/build_sprites.py [out_dir] [variant ...]   # sprite sheets, icons, thumbnail (howitzer-turret too)
+    blender -b --factory-startup -P tools/blender/plates.py -- <out_dir>   # armour plate renders
+    python tools/blender/build_icons.py <out_dir>                         # plate icons and equipment sprites
 
 ## Release
 
