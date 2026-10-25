@@ -183,6 +183,35 @@ local function setup()
   report(deviation(s.a) < 0.01, "turrets sit on the wagon axis", string.format("%.3f", deviation(s.a)))
   fill(s.a)
 
+  -- wagon panel: target priorities reach every turret, also turrets made later
+  remote.call("military-wagons", "configure", s.a, { targets = { "small-biter", nil, "medium-biter" }, ignore = true })
+  local prioritised = true
+  for _, t in pairs(turrets(s.a)) do
+    local first, third = t.get_priority_target(1), t.get_priority_target(3)
+    prioritised = prioritised
+      and first
+      and first.name == "small-biter"
+      and third
+      and third.name == "medium-biter"
+      and t.ignore_unprioritised_targets
+  end
+  report(prioritised, "target priorities reach the turrets")
+  if MOD == "rocket-turret-wagon" then
+    remote.call("military-wagons", "configure", s.a, { min_range = 16 })
+    local ranged = true
+    for _, t in pairs(turrets(s.a)) do
+      ranged = ranged
+        and t.prototype.attack_parameters.min_range == 16
+        and t.get_priority_target(1) ~= nil
+        and t.ignore_unprioritised_targets
+    end
+    report(ranged, "minimum range can be raised and keeps the priorities", turrets(s.a)[1].name)
+    remote.call("military-wagons", "configure", s.a, { min_range = 8 })
+    report(turrets(s.a)[1].name == TURRET, "minimum range back to 8 gives the plain turret", turrets(s.a)[1].name)
+  end
+  remote.call("military-wagons", "configure", s.a, { targets = {} })
+  report(turrets(s.a)[1].get_priority_target(1) == nil, "target priorities can be cleared")
+
   -- B: moving train with enemies along the track
   rail_line(surface, false, -81, -151, 151)
   s.b, s.b_loco = train(surface, false, -81, -130)

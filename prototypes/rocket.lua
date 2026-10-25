@@ -60,7 +60,7 @@ return function(config)
     }
   end
   -- explosions must stay clear of the train, but enemies at the train should still be hit
-  turret.attack_parameters.min_range = 8
+  turret.attack_parameters.min_range = config.min_ranges[1]
 
   data:extend({
     wagon,
@@ -121,5 +121,11 @@ return function(config)
       },
     },
   })
-  data:extend(rig.variants(turret, config.mounts))
+  -- the minimum range is fixed in the prototype, so every choice is a turret of its own
+  for _, range in pairs(config.min_ranges) do
+    local variant = table.deepcopy(turret)
+    variant.name = rig.range_name(config.turret, range, config.min_ranges)
+    variant.attack_parameters.min_range = range
+    data:extend(rig.variants(variant, config.mounts))
+  end
 end

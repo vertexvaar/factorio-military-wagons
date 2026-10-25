@@ -29,8 +29,13 @@ config.wagons = {
     fluid = false,
     mounts = { -1.5, 1.5 },
     refill = 10,
+    -- minimum ranges the player can choose; the first is the turret's own
+    min_ranges = { 8, 10, 12, 14, 16, 18, 20, 22, 24 },
   },
 }
+
+-- How many entries a wagon's target priority list has.
+config.priority_slots = 8
 
 -- Armour plates for the wagons' equipment grid. Each resistance is { flat, percent }.
 -- Several plates: the flat values add up, the percentages apply one after the other
