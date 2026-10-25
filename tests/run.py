@@ -4,7 +4,7 @@ Creates an isolated Factorio environment (own config, write dir and mod dir)
 under tests/.env, creates a map with the test harness mod and runs it through
 --benchmark. Prints all WAGONTEST lines and exits non-zero on failure.
 
-Every wagon gets a run of its own with the other two switched off, plus one
+Every wagon gets a run of its own with the others switched off, plus one
 run with all wagons on. The harness tests the wagon named in its wagon.lua.
 
 Usage: python tests/run.py [--no-space-age] [path-to-factorio.exe]
@@ -20,9 +20,9 @@ ENV = os.path.join(ROOT, "tests", ".env")
 NAME = json.load(open(os.path.join(ROOT, "info.json")))["name"]
 HARNESS = "turret-wagon-test"
 DEFAULT_EXE = r"C:\Program Files (x86)\Steam\steamapps\common\Factorio\bin\x64\factorio.exe"
-MOD_FILES = ["info.json", "settings.lua", "data.lua", "control.lua", "config.lua", "changelog.txt", "thumbnail.png"]
+MOD_FILES = ["info.json", "settings.lua", "data.lua", "data-final-fixes.lua", "control.lua", "config.lua", "changelog.txt", "thumbnail.png"]
 MOD_DIRS = ["prototypes", "graphics", "locale"]
-WAGONS = ["gun-turret-wagon", "flamethrower-turret-wagon", "rocket-turret-wagon"]
+WAGONS = ["gun-turret-wagon", "flamethrower-turret-wagon", "rocket-turret-wagon", "twin-cannon-wagon", "howitzer-wagon"]
 
 
 def prepare(space_age, wagon, off=()):

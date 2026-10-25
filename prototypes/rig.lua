@@ -17,6 +17,9 @@ rig.SINK_MIN = 0.05
 
 function rig.sink(k) return k * rig.SINK_STEP + rig.SINK_MIN end
 
+-- The turret with another minimum range than the first (its own) in the list.
+function rig.range_name(name, range, ranges) return range == ranges[1] and name or name .. "-min-" .. range end
+
 function rig.sink_name(name, k) return k == 0 and name or name .. "-sink-" .. k end
 
 -- How many steps the turret furthest from the wagon centre can need, with one
@@ -156,6 +159,8 @@ function rig.armour(wagon)
     { type = "fire", decrease = 5, percent = 50 },
     { type = "impact", decrease = 50, percent = 60 },
   }
+  -- armour plates and everything a tank takes (prototypes/armor_plates.lua)
+  wagon.equipment_grid = "military-wagon-equipment-grid"
 end
 
 return rig

@@ -32,10 +32,12 @@ def reset():
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
-    # use an NVIDIA card when there is one; much faster than the CPU
+    # use an NVIDIA card when there is one; much faster than the CPU. WAGON_GPU=CUDA picks
+    # CUDA where OptiX fails to load its kernel (older drivers)
     try:
         prefs = bpy.context.preferences.addons["cycles"].preferences
-        for backend in ("OPTIX", "CUDA"):
+        backends = [os.environ["WAGON_GPU"]] if os.environ.get("WAGON_GPU") else ("OPTIX", "CUDA")
+        for backend in backends:
             prefs.compute_device_type = backend
             prefs.get_devices()
             gpus = [d for d in prefs.devices if d.type == backend]

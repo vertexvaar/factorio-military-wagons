@@ -29,8 +29,72 @@ config.wagons = {
     fluid = false,
     mounts = { -1.5, 1.5 },
     refill = 10,
+    -- minimum ranges the player can choose; the first is the turret's own
+    min_ranges = { 8, 10, 12, 14, 16, 18, 20, 22, 24 },
+  },
+  {
+    name = "twin-cannon-wagon",
+    turret = "twin-cannon-wagon-turret",
+    variant = "twin",
+    fluid = false,
+    mounts = { -1.6, 1.6 },
+    refill = 10,
+  },
+  {
+    name = "howitzer-wagon",
+    turret = "howitzer-wagon-turret",
+    variant = "howitzer",
+    fluid = false,
+    mounts = { 0 },
+    refill = 10,
+  },
+  -- an artillery wagon that throws mines where the remote points; no roof turrets
+  {
+    name = "mine-launcher-wagon",
+    variant = "mine",
+    mounts = {},
   },
 }
+
+-- How many entries a wagon's target priority list has.
+config.priority_slots = 8
+
+-- Armour plates for the wagons' equipment grid. Each resistance is { flat, percent }.
+-- Several plates: the flat values add up, the percentages apply one after the other
+-- (two times 20 % make 36 %), capped at config.armor_cap.
+config.plates = {
+  { name = "composite-armor-plate", resistances = { physical = { 1, 5 } } },
+  { name = "reactive-armor-plate", resistances = { explosion = { 3, 6 } } },
+  { name = "acid-armor-plate", resistances = { acid = { 1, 6 } } },
+  { name = "fire-armor-plate", resistances = { fire = { 2, 6 } } },
+  -- tungsten plates need Space Age
+  {
+    name = "tungsten-carbide-armor-plate",
+    resistances = { physical = { 2, 9 }, acid = { 0, 3 }, fire = { 0, 4 } },
+    space_age = true,
+  },
+  {
+    name = "tungsten-reactive-armor-plate",
+    resistances = { explosion = { 6, 10 }, physical = { 0.5, 3 } },
+    space_age = true,
+  },
+  {
+    name = "tungsten-carbide-acid-armor-plate",
+    resistances = { acid = { 2, 12 }, fire = { 0, 4 } },
+    space_age = true,
+  },
+}
+config.armor_cap = 80
+
+-- Wagon turrets fire their own copies of the tank shells, which pass their own side:
+-- from a turret on a train, a shell starts among its own wagons. The copies are named
+-- config.shell_prefix .. original and loaded from the original shells in the cargo.
+config.shell_category = "military-wagons-cannon-shell"
+config.shell_prefix = "military-wagons-"
+-- how far the shell copies fly: tank shells stop at 30, the howitzer reaches 36
+config.shell_range = 40
+config.grid = "military-wagon-equipment-grid"
+config.armor_category = "military-wagon-armor"
 
 function config.setting(wagon) return "military-wagons-" .. wagon.name end
 

@@ -1,4 +1,5 @@
-"""Armoured turret wagons: machine gun (mg), flamethrower (flame) and rocket (rocket).
+"""Armoured turret wagons: machine gun (mg), flamethrower (flame), rocket (rocket),
+twin cannon (twin), howitzer (howitzer) and mine launcher (mine).
 
 Run:  blender -b --factory-startup -P tools/blender/wagon.py -- <variant> <out_dir> [frames...]
 Frames are 0..127, frame i shows orientation i/256 (back equals front).
@@ -27,6 +28,12 @@ VARIANTS = {
     "mg": {"mounts": (-1.9, 0.0, 1.9), "radius": 0.42, "top": DECK + 0.22},
     "flame": {"mounts": (-1.5, 1.5), "radius": 0.5, "top": 2.3},
     "rocket": {"mounts": (-1.5, 1.5), "radius": 0.66, "top": DECK + 0.2},
+    # the vanilla tank turret sits on these
+    "twin": {"mounts": (-1.6, 1.6), "radius": 0.7, "top": DECK + 0.18},
+    # one big ring for the howitzer turret (tools/blender/turret.py, rendered as howitzer-turret)
+    "howitzer": {"mounts": (0.0,), "radius": 0.86, "top": DECK + 0.16},
+    # the launcher racks do not turn; no mounts
+    "mine": {"mounts": (), "radius": 0, "top": DECK},
 }
 
 
@@ -293,6 +300,66 @@ def rockets(m):
     rig.cylinder("crane_hook", (0.4, 2.2, DECK + 0.62), (0.4, 2.2, DECK + 0.4), 0.008, m["dark"], verts=6)
 
 
+def twin_cannon(m):
+    v = VARIANTS["twin"]
+    skirts(m)
+    hull(m)
+    deck_railing(m, DECK)
+    for i, y in enumerate(v["mounts"]):
+        barbette(f"barbette{i}", m, y, v["radius"], DECK, v["top"])
+    # shell crates between the turrets, a hatch and an aerial at the ends
+    for k, x in enumerate((-0.45, 0.45)):
+        crate(f"shell_crate{k}", m, (x, 0, DECK + 0.1), (0.34, 0.5, 0.18))
+    for k in range(3):
+        rig.cylinder(f"shell{k}", (-0.12 + k * 0.12, -0.25, DECK + 0.06), (-0.12 + k * 0.12, 0.25, DECK + 0.06), 0.045, m["brass"], verts=12)
+    rig.cylinder("aerial", (0.78, 2.55, DECK), (0.78, 2.55, DECK + 0.9), 0.012, m["steel"], verts=6)
+    rig.cylinder("aerial_base", (0.78, 2.55, DECK), (0.78, 2.55, DECK + 0.08), 0.045, m["dark"])
+
+
+def howitzer(m):
+    v = VARIANTS["howitzer"]
+    skirts(m)
+    hull(m)
+    deck_railing(m, DECK)
+    barbette("barbette0", m, v["mounts"][0], v["radius"], DECK, v["top"])
+    # ammunition lockers fore and aft, a rammer tray and a travel lock for the barrel
+    for sy in (-1, 1):
+        for sx in (-1, 1):
+            crate(f"locker{sy}{sx}", m, (sx * 0.5, sy * 1.85, DECK + 0.12), (0.4, 0.6, 0.22))
+        rig.box(f"rammer{sy}", (0, sy * 1.85, DECK + 0.05), (0.22, 0.7, 0.08), m["steel"])
+    rig.box("travel_lock_post", (0, 2.45, DECK + 0.3), (0.1, 0.1, 0.6), m["hazard"])
+    rig.box("travel_lock_fork", (0, 2.45, DECK + 0.62), (0.3, 0.08, 0.08), m["dark"])
+
+
+def mine_launcher(m):
+    skirts(m)
+    # armoured cab at the front, open deck with the launcher racks behind it
+    hull(m, deck=1.3)
+    cab_y0, cab_y1, cab_top = 1.2, HALF_LEN - 0.05, 2.0
+    rig.box("cab", (0, (cab_y0 + cab_y1) / 2, (1.3 + cab_top) / 2), (2 * HALF_W - 0.1, cab_y1 - cab_y0, cab_top - 1.3), m["armour"], mask=True)
+    rig.box("cab_roof", (0, (cab_y0 + cab_y1) / 2, cab_top + 0.02), (2 * HALF_W - 0.04, cab_y1 - cab_y0 + 0.06, 0.04), m["armour"], mask=True)
+    for sx in (-1, 1):
+        rig.box(f"cab_slit{sx}", (sx * (HALF_W - 0.045), (cab_y0 + cab_y1) / 2, cab_top - 0.2), (0.02, 0.9, 0.05), m["slit"], bevel=0)
+    rig.box("cab_window", (0, cab_y1 + 0.005, cab_top - 0.22), (1.2, 0.02, 0.08), m["slit"], bevel=0)
+    rivet_row("cab_rivets", (-HALF_W + 0.1, cab_y0 - 0.005, cab_top - 0.05), (HALF_W - 0.1, cab_y0 - 0.005, cab_top - 0.05), 12, m,
+              radius=0.014, axis="y")
+    # turntable with two rows of three launcher baskets, tilted outwards and to the rear
+    rig.cylinder("turntable", (0, -1.0, 1.3), (0, -1.0, 1.42), 0.95, m["steel"], verts=48)
+    rig.box("rack_frame", (0, -1.0, 1.5), (0.5, 1.9, 0.16), m["dark"])
+    for sx in (-1, 1):
+        for k in range(3):
+            y = -1.0 + (k - 1) * 0.62
+            basket = rig.box(f"basket{sx}{k}", (sx * 0.5, y, 1.78), (0.42, 0.56, 0.5), m["armour"], mask=True,
+                             rotation=(math.radians(-15), sx * math.radians(30), 0))
+            rig.box(f"basket_mouth{sx}{k}", (sx * 0.62, y - 0.06, 1.98), (0.3, 0.44, 0.04), m["slit"], bevel=0,
+                    rotation=(math.radians(-15), sx * math.radians(30), 0))
+            rig.box(f"basket_band{sx}{k}", (sx * 0.5, y, 1.72), (0.44, 0.58, 0.05), m["hazard"], bevel=0,
+                    rotation=(math.radians(-15), sx * math.radians(30), 0))
+    # spare mine crates on the rear platform
+    for k, x in enumerate((-0.5, 0.5)):
+        crate(f"mine_crate{k}", m, (x, -2.35, 1.42), (0.38, 0.4, 0.2))
+
+
 def build(variant):
     rig.reset()
     m = materials()
@@ -305,10 +372,24 @@ def build(variant):
         walk = flamethrower(m)
         ends(m, walk)
         rig.camera(8, 9, shift_y=1.5)
-    else:
+    elif variant == "rocket":
         rockets(m)
         ends(m, DECK)
         rig.camera(8, 8.5, shift_y=1.2)
+    elif variant == "twin":
+        twin_cannon(m)
+        ends(m, DECK)
+        rig.camera(8, 8.5, shift_y=1.2)
+    elif variant == "howitzer":
+        howitzer(m)
+        ends(m, DECK)
+        rig.camera(8, 8.5, shift_y=1.2)
+    elif variant == "mine":
+        mine_launcher(m)
+        ends(m, 2.0)
+        rig.camera(8, 9, shift_y=1.4)
+    else:
+        sys.exit(f"unknown variant {variant}")
     rig.sun()
     rig.fill_light()
 

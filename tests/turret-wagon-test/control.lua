@@ -7,6 +7,18 @@ local SPECS = {
   ["flamethrower-turret-wagon"] = { mounts = 2, refill = 100, fluid = "light-oil", amount = 1000, distance = 12 },
   -- rockets have a minimum range: their targets keep their distance
   ["rocket-turret-wagon"] = { mounts = 2, refill = 10, ammo = "rocket", amount = 50, distance = 22, hold = true },
+  ["twin-cannon-wagon"] = { mounts = 2, refill = 10, ammo = "cannon-shell", amount = 50, distance = 14 },
+  -- the howitzer has a minimum range of 12
+  -- it turns slowly and fires at half the tank's rate: passing at speed it gets most, not all
+  ["howitzer-wagon"] = {
+    mounts = 1,
+    refill = 10,
+    ammo = "cannon-shell",
+    amount = 50,
+    distance = 22,
+    hold = true,
+    track_misses = 2,
+  },
 }
 -- tests/run.py writes wagon.lua: the wagon under test
 local MOD = require("wagon")
@@ -65,7 +77,9 @@ local function load_of(entity)
   local inv = entity.get_inventory(
     entity.type == "cargo-wagon" and defines.inventory.cargo_wagon or defines.inventory.turret_ammo
   )
-  return inv.get_item_count(SPEC.ammo)
+  -- cannon turrets hold the mod's copy of the shell, which passes its own side
+  local copy = "military-wagons-" .. SPEC.ammo
+  return inv.get_item_count(SPEC.ammo) + (prototypes.item[copy] and inv.get_item_count(copy) or 0)
 end
 
 local function mount(wagon, offset)
@@ -75,10 +89,15 @@ local function mount(wagon, offset)
   return draw.x + math.sin(a) * offset, draw.y - math.cos(a) * offset * math.sin(math.rad(50))
 end
 
-local function mounts()
-  if SPEC.mounts == 2 then return { -1.5, 1.5 } end
-  return { -1.9, 0, 1.9 }
-end
+-- the mount offsets in config.lua
+local MOUNTS = {
+  ["gun-turret-wagon"] = { -1.9, 0, 1.9 },
+  ["flamethrower-turret-wagon"] = { -1.5, 1.5 },
+  ["rocket-turret-wagon"] = { -1.5, 1.5 },
+  ["twin-cannon-wagon"] = { -1.6, 1.6 },
+  ["howitzer-wagon"] = { 0 },
+}
+local function mounts() return MOUNTS[MOD] end
 
 -- How far the turrets are from their mounts; positions defaults to where they are now.
 local function deviation(wagon, positions)
@@ -120,6 +139,34 @@ local function setup()
       )
     end
   end
+  -- armour steel: 4 steel, 1 copper, 2 carbon, 20 water, quenched to steam
+  local recipe = prototypes.recipe["armor-steel"]
+  local amounts = {}
+  for _, i in pairs(recipe and recipe.ingredients or {}) do
+    amounts[i.name] = i.amount
+  end
+  report(
+    amounts["steel-plate"] == 4 and amounts["copper-plate"] == 1 and amounts["carbon"] == 2 and amounts["water"] == 20,
+    "armor steel recipe ingredients",
+    serpent.line(amounts)
+  )
+  local steam = false
+  for _, p in pairs(recipe and recipe.products or {}) do
+    steam = steam or p.name == "steam"
+  end
+  report(steam, "armor steel recipe gives off steam")
+  local unlocks = {}
+  for _, effect in pairs(prototypes.technology["armor-steel"].effects) do
+    if effect.type == "unlock-recipe" then unlocks[effect.recipe] = true end
+  end
+  report(unlocks["armor-steel"], "armor steel technology unlocks the recipe")
+  -- carbon comes from Space Age if present, otherwise from our coal recipe
+  local own_carbon = prototypes.recipe["military-wagons-carbon"] ~= nil
+  report(
+    own_carbon ~= (script.active_mods["space-age"] ~= nil)
+      and (own_carbon == (unlocks["military-wagons-carbon"] == true)),
+    "carbon recipe only without Space Age"
+  )
   local surface = game.surfaces.nauvis
   game.map_settings.enemy_expansion.enabled = false
   surface.request_to_generate_chunks({ 0, 0 }, 6)
@@ -155,6 +202,36 @@ local function setup()
   report(deviation(s.a) < 0.01, "turrets sit on the wagon axis", string.format("%.3f", deviation(s.a)))
   fill(s.a)
 
+  -- wagon panel: target priorities reach every turret, also turrets made later
+  remote.call("military-wagons", "configure", s.a, { targets = { "small-biter", nil, "medium-biter" }, ignore = true })
+  local prioritised = true
+  for _, t in pairs(turrets(s.a)) do
+    local first, third = t.get_priority_target(1), t.get_priority_target(3)
+    prioritised = prioritised
+      and first
+      and first.name == "small-biter"
+      and third
+      and third.name == "medium-biter"
+      and t.ignore_unprioritised_targets
+  end
+  report(prioritised, "target priorities reach the turrets")
+  if MOD == "rocket-turret-wagon" then
+    remote.call("military-wagons", "configure", s.a, { min_range = 16 })
+    local ranged = true
+    for _, t in pairs(turrets(s.a)) do
+      ranged = ranged
+        and t.prototype.attack_parameters.min_range == 16
+        and t.get_priority_target(1) ~= nil
+        and t.ignore_unprioritised_targets
+    end
+    report(ranged, "minimum range can be raised and keeps the priorities", turrets(s.a)[1].name)
+    remote.call("military-wagons", "configure", s.a, { min_range = 8 })
+    report(turrets(s.a)[1].name == TURRET, "minimum range back to 8 gives the plain turret", turrets(s.a)[1].name)
+  end
+  remote.call("military-wagons", "configure", s.a, { targets = {} })
+  -- reading past the end of the priority list is an error
+  report(#turrets(s.a)[1].priority_targets == 0, "target priorities can be cleared")
+
   -- B: moving train with enemies along the track
   rail_line(surface, false, -81, -151, 151)
   s.b, s.b_loco = train(surface, false, -81, -130)
@@ -166,7 +243,9 @@ local function setup()
   s.c = train(surface, true, 101, 0)
   local cx = turrets(s.c)[1]
   report(
-    cx and math.abs(cx.position.x - s.c.position.x) < 0.01 and math.abs(cx.position.y - s.c.position.y) > 1,
+    cx
+      and math.abs(cx.position.x - s.c.position.x) < 0.01
+      and (mounts()[1] == 0 or math.abs(cx.position.y - s.c.position.y) > 1),
     "turrets follow a vertical wagon",
     string.format("%.3f", deviation(s.c))
   )
@@ -217,6 +296,108 @@ local function setup()
       t and string.format("turret y %.2f, wagon drawn at %.2f", t.position.y, draw.y)
     )
     fill(s.g)
+  end
+
+  -- H: armour plates in the equipment grid
+  rail_line(surface, true, -121, -41, 41)
+  local h = train(surface, true, -121, 0)
+  local grid = h.grid
+  report(grid and grid.width == 16 and grid.height == 16, "wagon has a 16x16 equipment grid")
+  report(grid and grid.put({ name = "energy-shield-equipment" }) ~= nil, "grid takes tank equipment")
+  -- bare wagon: physical 5 / 30 %, so 100 damage does 66.5
+  h.damage(100, "enemy", "physical")
+  report(math.abs(h.health - 933.5) < 0.01, "unplated wagon takes its normal damage", string.format("%.2f", h.health))
+  h.health = 1000
+  -- four composite plates: physical 4 / 1 - 0.95^4 on top, (66.5 - 4) * 0.95^4 = 50.907
+  local plates = {}
+  for k = 1, 4 do
+    plates[k] = grid and grid.put({ name = "composite-armor-plate" })
+  end
+  report(plates[4] ~= nil, "grid takes four armour plates")
+  h.damage(100, "enemy", "physical")
+  report(
+    math.abs(h.health - (1000 - 62.5 * 0.95 ^ 4)) < 0.01,
+    "armour plates reduce physical damage",
+    string.format("%.2f", h.health)
+  )
+  h.health = 1000
+  h.damage(100, "enemy", "explosion")
+  report(
+    math.abs(h.health - 937) < 0.01,
+    "armour plates leave other damage types alone",
+    string.format("%.2f", h.health)
+  )
+  -- a hit that would destroy the bare wagon but not the plated one
+  -- brought down by hits, so the mod knows its health: explosion (1360 - 10) * 0.7 = 945
+  h.health = 1000
+  h.damage(1360, "enemy", "explosion")
+  h.damage(100, "enemy", "physical")
+  report(
+    h.valid and math.abs(h.health - (55 - 62.5 * 0.95 ^ 4)) < 0.01,
+    "armour plates catch a hit that would be lethal",
+    h.valid and string.format("%.2f", h.health) or "destroyed"
+  )
+  if h.valid then
+    h.health = 1000
+    for _, plate in pairs(plates) do
+      grid.take({ equipment = plate })
+    end
+    h.damage(100, "enemy", "physical")
+    report(math.abs(h.health - 933.5) < 0.01, "removed plates stop protecting", string.format("%.2f", h.health))
+    -- two reactive plates: explosion (63 - 6) * 0.94^2 = 50.37
+    h.health = 1000
+    grid.put({ name = "reactive-armor-plate" })
+    grid.put({ name = "reactive-armor-plate" })
+    h.damage(100, "enemy", "explosion")
+    report(
+      math.abs(h.health - (1000 - 57 * 0.94 ^ 2)) < 0.01,
+      "reactive plates reduce explosion damage",
+      string.format("%.2f", h.health)
+    )
+    local tungsten = prototypes.equipment["tungsten-reactive-armor-plate"] ~= nil
+    report(tungsten == (script.active_mods["space-age"] ~= nil), "tungsten plates only with Space Age")
+  end
+
+  -- the tank's own shells still hit their own side; only the wagon copies pass it
+  if prototypes.item["military-wagons-cannon-shell"] then
+    report(
+      prototypes.item["military-wagons-cannon-shell"].ammo_category.name == "military-wagons-cannon-shell"
+        and prototypes.item["cannon-shell"].ammo_category.name == "cannon-shell",
+      "cannon wagons fire their own copies of the tank shells"
+    )
+  end
+
+  -- I: mine launcher, whenever it is switched on: throws a mine only at its own flare
+  if prototypes.entity["mine-launcher-wagon"] then
+    rail_line(surface, true, -141, -41, 41)
+    s.mine = surface.create_entity({
+      name = "mine-launcher-wagon",
+      force = "player",
+      direction = defines.direction.north,
+      position = { -141, 0 },
+      raise_built = true,
+    })
+    s.mine.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 5 })
+    report(s.mine.grid ~= nil, "mine launcher has an equipment grid")
+    surface.create_entity({
+      name = "mine-launcher-flare",
+      position = { -111, 10 },
+      force = "player",
+      movement = { 0, 0 },
+      height = 0,
+      vertical_speed = 0,
+      frame_speed = 0,
+    })
+    -- a plain artillery flare, which the launcher must leave alone
+    surface.create_entity({
+      name = "artillery-flare",
+      position = { -111, -10 },
+      force = "player",
+      movement = { 0, 0 },
+      height = 0,
+      vertical_speed = 0,
+      frame_speed = 0,
+    })
   end
 
   -- an empty wagon must not do anything bad
@@ -316,6 +497,11 @@ script.on_event(defines.events.on_tick, function()
   end
   if age == 80 then spawn_enemies() end
   if age == 1200 then
+    report(s.b.valid, "moving train survives its own fire")
+    if not s.b.valid then
+      log("WAGONTEST DONE")
+      return
+    end
     report(
       s.b.position.x - s.b_start > 200,
       "test train moved",
@@ -325,6 +511,11 @@ script.on_event(defines.events.on_tick, function()
   end
   if age == 1300 then
     report(alive(s.a_enemies) == 0, "standing train kills nearby enemies", alive(s.a_enemies) .. " left")
+    report(s.a.valid and s.a_loco.valid, "standing train is still there after the fight")
+    if not (s.a.valid and s.a_loco.valid) then
+      log("WAGONTEST DONE")
+      return
+    end
     report(
       s.a.health > s.a.max_health * 0.9,
       "wagon survives the fight",
@@ -339,7 +530,11 @@ script.on_event(defines.events.on_tick, function()
     for _, e in pairs(s.b_enemies) do
       if e.valid then log(string.format("WAGONDEBUG left %.1f,%.1f hp %.0f", e.position.x, e.position.y, e.health)) end
     end
-    report(alive(s.b_enemies) == 0, "moving train kills enemies along the track", alive(s.b_enemies) .. " left")
+    report(
+      alive(s.b_enemies) <= (SPEC.track_misses or 0),
+      "moving train kills enemies along the track",
+      alive(s.b_enemies) .. " left"
+    )
     local expected = 0
     for _, wagon in pairs(s.surface.find_entities_filtered({ name = MOD })) do
       expected = expected + SPEC.mounts
@@ -350,6 +545,13 @@ script.on_event(defines.events.on_tick, function()
     end
     local count = s.surface.count_entities_filtered({ name = names })
     report(count == expected, "no orphaned turrets", count .. " turrets, " .. expected .. " expected")
+    if s.mine then
+      local at_flare = s.surface.count_entities_filtered({ name = "land-mine", position = { -111, 10 }, radius = 4 })
+      local at_artillery =
+        s.surface.count_entities_filtered({ name = "land-mine", position = { -111, -10 }, radius = 4 })
+      report(at_flare == 1, "mine launcher throws one mine at its flare", at_flare .. " mines")
+      report(at_artillery == 0, "mine launcher ignores artillery flares", at_artillery .. " mines")
+    end
     log("WAGONTEST DONE")
   end
 end)
