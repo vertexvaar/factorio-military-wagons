@@ -483,6 +483,9 @@ local ARMOR_TYPES = { "physical", "explosion", "acid", "fire" }
 local function show_armor(flow, wagon)
   flow.clear()
   local any = false
+  -- decimal comma where the player's language uses one
+  local locale = game.get_player(flow.player_index).locale
+  local comma = locale == "de" or locale == "fr" or locale == "es-ES" or locale == "it" or locale == "nl" or locale == "pl"
   for _, damage_type in pairs(ARMOR_TYPES) do
     local flat, factor = plating(wagon.grid, damage_type)
     if flat > 0 or factor < 1 then
@@ -492,7 +495,7 @@ local function show_armor(flow, wagon)
         caption = {
           "military-wagons.armor-line",
           { "damage-type-name." .. damage_type },
-          string.format("%g", flat),
+          comma and (string.format("%g", flat):gsub("%.", ",")) or string.format("%g", flat),
           string.format("%d", math.floor((1 - factor) * 100 + 0.5)),
         },
       })
@@ -511,7 +514,8 @@ local function open_panel(player, wagon, rig)
     caption = { "military-wagons.panel" },
     direction = "vertical",
     anchor = {
-      gui = defines.relative_gui_type.train_gui,
+      -- a cargo wagon's window is a container window
+      gui = defines.relative_gui_type.container_gui,
       position = defines.relative_gui_position.right,
       names = ARMORED_NAMES,
     },
