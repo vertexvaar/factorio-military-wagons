@@ -136,14 +136,14 @@ for order, entry in ipairs(config.plates) do
         stack_size = 20,
       },
       {
-        type = "battery-equipment",
+        -- equipment that needs no energy and shows no power line under the grid
+        type = "inventory-bonus-equipment",
         name = name,
         sprite = rendered[name]
             and { filename = GRAPHICS .. name .. "-equipment.png", width = 256, height = 256, scale = 0.5 }
           or { filename = PLATE_ICON, width = 64, height = 64, scale = 2, tint = plate.tint },
         shape = { width = 4, height = 4, type = "full" },
-        -- a battery that holds nothing: equipment needs an energy source
-        energy_source = { type = "electric", buffer_capacity = "1J", usage_priority = "tertiary" },
+        inventory_size_bonus = 0,
         categories = { config.armor_category },
       },
       {
