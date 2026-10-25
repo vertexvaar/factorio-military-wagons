@@ -1,7 +1,7 @@
 """Turns the Blender renders into Factorio sprite sheets, graphics/<variant>/entity/sprites.lua,
 the icons and the portal thumbnail (all three wagons side by side).
 
-Usage: python tools/blender/build_sprites.py [render_dir] [mg|flame|rocket ...]   (default: tools/blender/out, all)
+Usage: python tools/blender/build_sprites.py [render_dir] [variant ...]   (default: tools/blender/out, all)
 Expects the layout written by render_all.sh: <render_dir>/<variant>/{color,mask,shadow}_NNN.png
 """
 import json
@@ -15,9 +15,14 @@ import pack  # noqa: E402
 from PIL import Image  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-VARIANTS = ["mg", "flame", "rocket"]
+VARIANTS = ["mg", "flame", "rocket", "twin", "howitzer", "mine"]
 # default train colour of each wagon, for the icons (keep in sync with wagon.color in prototypes/<variant>.lua)
-COLORS = {"mg": (0.35, 0.4, 0.25), "flame": (0.55, 0.3, 0.15), "rocket": (0.3, 0.33, 0.38)}
+COLORS = {
+    "mg": (0.35, 0.4, 0.25), "flame": (0.55, 0.3, 0.15), "rocket": (0.3, 0.33, 0.38),
+    "twin": (0.3, 0.36, 0.22), "howitzer": (0.4, 0.38, 0.26), "mine": (0.42, 0.4, 0.18),
+}
+# the wagons on the portal thumbnail
+THUMBNAIL = ["mg", "flame", "rocket"]
 FRAMES = 128
 
 
@@ -116,9 +121,9 @@ def thumbnail(wagons):
 
 
 def main(render_dir, variants):
-    wagons = [build(render_dir, v) for v in variants]
-    if variants == VARIANTS:
-        thumbnail(wagons)
+    wagons = {v: build(render_dir, v) for v in variants}
+    if all(v in wagons for v in THUMBNAIL):
+        thumbnail([wagons[v] for v in THUMBNAIL])
         print("wrote thumbnail")
 
 
