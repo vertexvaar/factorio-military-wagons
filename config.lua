@@ -32,6 +32,14 @@ config.wagons = {
     -- minimum ranges the player can choose; the first is the turret's own
     min_ranges = { 8, 10, 12, 14, 16, 18, 20, 22, 24 },
   },
+  {
+    name = "twin-cannon-wagon",
+    turret = "twin-cannon-wagon-turret",
+    variant = "twin",
+    fluid = false,
+    mounts = { -1.6, 1.6 },
+    refill = 10,
+  },
 }
 
 -- How many entries a wagon's target priority list has.

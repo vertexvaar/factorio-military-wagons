@@ -7,6 +7,7 @@ local SPECS = {
   ["flamethrower-turret-wagon"] = { mounts = 2, refill = 100, fluid = "light-oil", amount = 1000, distance = 12 },
   -- rockets have a minimum range: their targets keep their distance
   ["rocket-turret-wagon"] = { mounts = 2, refill = 10, ammo = "rocket", amount = 50, distance = 22, hold = true },
+  ["twin-cannon-wagon"] = { mounts = 2, refill = 10, ammo = "cannon-shell", amount = 50, distance = 14 },
 }
 -- tests/run.py writes wagon.lua: the wagon under test
 local MOD = require("wagon")
