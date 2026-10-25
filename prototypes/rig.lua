@@ -156,6 +156,8 @@ function rig.armour(wagon)
     { type = "fire", decrease = 5, percent = 50 },
     { type = "impact", decrease = 50, percent = 60 },
   }
+  -- armour plates and everything a tank takes (prototypes/armor_plates.lua)
+  wagon.equipment_grid = "military-wagon-equipment-grid"
 end
 
 return rig

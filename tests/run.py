@@ -20,7 +20,7 @@ ENV = os.path.join(ROOT, "tests", ".env")
 NAME = json.load(open(os.path.join(ROOT, "info.json")))["name"]
 HARNESS = "turret-wagon-test"
 DEFAULT_EXE = r"C:\Program Files (x86)\Steam\steamapps\common\Factorio\bin\x64\factorio.exe"
-MOD_FILES = ["info.json", "settings.lua", "data.lua", "control.lua", "config.lua", "changelog.txt", "thumbnail.png"]
+MOD_FILES = ["info.json", "settings.lua", "data.lua", "data-final-fixes.lua", "control.lua", "config.lua", "changelog.txt", "thumbnail.png"]
 MOD_DIRS = ["prototypes", "graphics", "locale"]
 WAGONS = ["gun-turret-wagon", "flamethrower-turret-wagon", "rocket-turret-wagon"]
 

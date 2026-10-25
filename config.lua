@@ -32,6 +32,19 @@ config.wagons = {
   },
 }
 
+-- Armour plates for the wagons' equipment grid. Each resistance is { flat, percent }.
+-- Several plates: the flat values add up, the percentages apply one after the other
+-- (two times 20 % make 36 %), capped at config.armor_cap.
+config.plates = {
+  {
+    name = "composite-armor-plate",
+    resistances = { physical = { 4, 20 } },
+  },
+}
+config.armor_cap = 80
+config.grid = "military-wagon-equipment-grid"
+config.armor_category = "military-wagon-armor"
+
 function config.setting(wagon) return "military-wagons-" .. wagon.name end
 
 -- Before 0.3.0 every wagon was a mod of its own (since then an empty bridge that

@@ -247,6 +247,42 @@ local function setup()
     fill(s.g)
   end
 
+  -- H: armour plates in the equipment grid
+  rail_line(surface, true, -121, -41, 41)
+  local h = train(surface, true, -121, 0)
+  local grid = h.grid
+  report(grid and grid.width == 16 and grid.height == 16, "wagon has a 16x16 equipment grid")
+  report(grid and grid.put({ name = "energy-shield-equipment" }) ~= nil, "grid takes tank equipment")
+  -- bare wagon: physical 5 / 30 %, so 100 damage does 66.5
+  h.damage(100, "enemy", "physical")
+  report(math.abs(h.health - 933.5) < 0.01, "unplated wagon takes its normal damage", string.format("%.2f", h.health))
+  h.health = 1000
+  report(grid and grid.put({ name = "composite-armor-plate" }) ~= nil, "grid takes an armour plate")
+  -- plate: physical 4 / 20 % on top, (66.5 - 4) * 0.8 = 50
+  h.damage(100, "enemy", "physical")
+  report(math.abs(h.health - 950) < 0.01, "armour plate reduces physical damage", string.format("%.2f", h.health))
+  h.health = 1000
+  h.damage(100, "enemy", "explosion")
+  report(
+    math.abs(h.health - 937) < 0.01,
+    "armour plate leaves other damage types alone",
+    string.format("%.2f", h.health)
+  )
+  -- a hit that would destroy the bare wagon but not the plated one
+  h.health = 55
+  h.damage(100, "enemy", "physical")
+  report(
+    h.valid and math.abs(h.health - 5) < 0.01,
+    "armour plate catches a hit that would be lethal",
+    h.valid and string.format("%.2f", h.health) or "destroyed"
+  )
+  if h.valid then
+    h.health = 1000
+    grid.take({ name = "composite-armor-plate" })
+    h.damage(100, "enemy", "physical")
+    report(math.abs(h.health - 933.5) < 0.01, "removed plate stops protecting", string.format("%.2f", h.health))
+  end
+
   -- an empty wagon must not do anything bad
   rail_line(surface, true, -101, -41, 41)
   s.empty = train(surface, true, -101, 0)

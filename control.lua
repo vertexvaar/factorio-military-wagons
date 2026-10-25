@@ -311,6 +311,46 @@ local function on_destroyed(event)
   end
 end
 
+-- Armour plates. Equipment cannot give a vehicle resistances, so the plates' share
+-- is healed back right after a hit. A hit asks the grid only for the plates that
+-- resist its damage type; there is nothing to keep track of when plates come and go.
+
+-- PLATES[damage type] = { { name, flat, factor }, ... }
+local PLATES = {}
+for _, plate in pairs(config.plates) do
+  for damage_type, r in pairs(plate.resistances) do
+    PLATES[damage_type] = PLATES[damage_type] or {}
+    table.insert(PLATES[damage_type], { name = plate.name, flat = r[1], factor = 1 - r[2] / 100 })
+  end
+end
+local FLOOR = 1 - config.armor_cap / 100
+
+-- Factorio's resistance formula: flat first, then percent; a hit never does nothing.
+local function resist(damage, flat, factor)
+  if damage > flat then return (damage - flat) * factor end
+  return factor / (2 + flat - damage)
+end
+
+local function on_damaged(event)
+  local plates = PLATES[event.damage_type.name]
+  local wagon = event.entity
+  if not plates or not wagon.valid then return end
+  local grid = wagon.grid
+  if not grid then return end
+  local flat, factor = 0, 1
+  for _, plate in pairs(plates) do
+    local n = grid.count(plate.name)
+    if n > 0 then
+      flat = flat + n * plate.flat
+      factor = factor * plate.factor ^ n
+    end
+  end
+  if flat == 0 and factor == 1 then return end
+  local damage = event.final_damage_amount
+  local heal = damage - resist(damage, flat, math.max(factor, FLOOR))
+  if heal > 0 then wagon.health = event.final_health + heal end
+end
+
 -- Rebuilds the bookkeeping from the map: rigs for every wagon, no orphaned turrets.
 local function rebuild()
   storage.rigs = storage.rigs or {}
@@ -370,6 +410,7 @@ if next(WAGON_NAMES) then
   }) do
     script.on_event(e, on_mined, filter)
   end
+  script.on_event(defines.events.on_entity_damaged, on_damaged, filter)
 end
 script.on_event(defines.events.on_object_destroyed, on_destroyed)
 script.on_nth_tick(REFILL_INTERVAL, on_refill)

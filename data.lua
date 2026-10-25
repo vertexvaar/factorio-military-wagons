@@ -5,3 +5,4 @@ for _, wagon in ipairs(config.enabled()) do
 end
 
 require("prototypes.armor_steel")
+require("prototypes.armor_plates")
