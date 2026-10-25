@@ -28,7 +28,7 @@ else
     {
       type = "recipe",
       name = "military-wagons-carbon",
-      category = "smelting",
+      categories = { "smelting" },
       energy_required = 3.2,
       enabled = false,
       ingredients = { { type = "item", name = "coal", amount = 2 } },
@@ -55,7 +55,7 @@ data:extend({
   {
     type = "recipe",
     name = "armor-steel",
-    category = "chemistry",
+    categories = { "chemistry" },
     energy_required = 4,
     enabled = false,
     ingredients = {
