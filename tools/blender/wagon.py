@@ -30,7 +30,7 @@ VARIANTS = {
     "rocket": {"mounts": (-1.5, 1.5), "radius": 0.66, "top": DECK + 0.2},
     # the vanilla tank turret sits on these
     "twin": {"mounts": (-1.6, 1.6), "radius": 0.7, "top": DECK + 0.18},
-    # one big ring for the howitzer turret (tools/blender/turret.py)
+    # one big ring for the howitzer turret (tools/blender/turret.py, rendered as howitzer-turret)
     "howitzer": {"mounts": (0.0,), "radius": 0.86, "top": DECK + 0.16},
     # the launcher racks do not turn; no mounts
     "mine": {"mounts": (), "radius": 0, "top": DECK},
