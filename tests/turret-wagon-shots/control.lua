@@ -4,6 +4,9 @@ local SPECS = {
   ["gun-turret-wagon"] = { ammo = "firearm-magazine", amount = 200, distance = 10 },
   ["flamethrower-turret-wagon"] = { fluid = "light-oil", amount = 20000, distance = 10 },
   ["rocket-turret-wagon"] = { ammo = "rocket", amount = 100, distance = 20 },
+  ["twin-cannon-wagon"] = { ammo = "cannon-shell", amount = 100, distance = 14 },
+  -- the howitzer has a minimum range of 12: the fight is shot from further out
+  ["howitzer-wagon"] = { ammo = "cannon-shell", amount = 100, distance = 22, view = { 0, 12 }, zoom = 0.75 },
 }
 -- tests/run.py writes wagon.lua: the wagon under test
 local MOD = require("wagon")
@@ -110,6 +113,18 @@ local function setup()
     s.e = train(surface, false, 41, 0)
     log("WAGONSHOT elevated wagon " .. tostring(s.e and s.e.valid) .. " " .. serpent.line(s.e and s.e.draw_data))
   end
+  -- mine launcher, whenever it is switched on: throws mines at its flares
+  if prototypes.entity["mine-launcher-wagon"] then
+    rail_line(surface, true, -121, -31, 31)
+    s.mine = surface.create_entity({
+      name = "mine-launcher-wagon",
+      force = "player",
+      direction = defines.direction.north,
+      position = { -121, 0 },
+      raise_built = true,
+    })
+    s.mine.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 20 })
+  end
   storage.s = s
 end
 
@@ -132,17 +147,39 @@ script.on_event(defines.events.on_tick, function()
   if s.b_loco.valid and s.b_loco.train.speed < 1 and age < 300 then s.b_loco.train.speed = 1 end
   if age == 60 or age == 150 then biters(s.surface, -6, 1 + SPEC.distance, 6) end
   if age == 100 then biters(s.surface, 40, -61 - SPEC.distance, 6) end
+  -- flares for the mine launcher, a few at a time so mines are in the air and on the ground
+  local flares = { [20] = { -100, -8 }, [40] = { -97, 4 }, [60] = { -104, 12 }, [80] = { -94, -2 }, [100] = { -101, -14 } }
+  if s.mine and flares[age] then
+    s.surface.create_entity({
+      name = "mine-launcher-flare",
+      position = flares[age],
+      force = "player",
+      movement = { 0, 0 },
+      height = 0,
+      vertical_speed = 0,
+      frame_speed = 0,
+    })
+  end
   local shots = {
     [5] = { "standing", { 0, 0 }, 1.5 },
     [6] = { "vertical", { 81, 0 }, 1.5 },
     [7] = { "elevated", { 0, 38 }, 1.5 },
     [8] = { "trees", { 0, -31 }, 1.5 },
     [9] = { "trees-vertical", { 121, 0 }, 1.5 },
-    [80] = { "fighting", { 0, 4 }, 1 },
-    [170] = { "fighting-2", { 0, 4 }, 1 },
+    [80] = { "fighting", SPEC.view or { 0, 4 }, SPEC.zoom or 1 },
+    [170] = { "fighting-2", SPEC.view or { 0, 4 }, SPEC.zoom or 1 },
     [90] = { "fast-1", "b", 1.5 },
     [120] = { "fast-2", "b", 1 },
   }
+  -- more moments of the fight and of the mine launcher, to pick one with shots in the air
+  for _, t in pairs({ 95, 100, 110, 125, 140, 160, 185 }) do
+    shots[t] = shots[t] or { "fighting-" .. t, SPEC.view or { 0, 4 }, SPEC.zoom or 1 }
+  end
+  if s.mine then
+    for _, t in pairs({ 300, 450, 600, 750 }) do
+      shots[t] = { "mine-launcher-" .. t, { -108, 0 }, 1 }
+    end
+  end
   local shot = shots[age]
   if shot then
     local position = shot[2] == "b" and s.b.position or shot[2]
