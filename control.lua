@@ -646,6 +646,37 @@ local function on_settings_pasted(event)
 end
 
 -- Rebuilds the bookkeeping from the map: rigs for every wagon, no orphaned turrets.
+-- A grid made smaller keeps equipment outside its new edges: unseen, but still working.
+-- That equipment goes back into the wagon, or next to it when the wagon has no room.
+local function trim_grids()
+  local names = next(ARMORED_NAMES) and ARMORED_NAMES
+  if not names then return end
+  local moved = 0
+  for _, surface in pairs(game.surfaces) do
+    for _, wagon in pairs(surface.find_entities_filtered({ name = names })) do
+      local grid = wagon.grid
+      if grid then
+        local cargo = wagon.get_inventory(defines.inventory.cargo_wagon)
+        for _, equipment in pairs(grid.equipment) do
+          local p, shape = equipment.position, equipment.shape
+          if p.x + shape.width > grid.width or p.y + shape.height > grid.height then
+            local stack = grid.take({ equipment = equipment })
+            if stack then
+              moved = moved + 1
+              local inserted = cargo and cargo.insert(stack) or 0
+              if inserted < stack.count then
+                stack.count = stack.count - inserted
+                surface.spill_item_stack({ position = wagon.position, stack = stack, force = wagon.force })
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  if moved > 0 then game.print({ "military-wagons.grid-trimmed", moved }) end
+end
+
 local function rebuild()
   storage.rigs = storage.rigs or {}
   storage.panels = storage.panels or {}
@@ -726,7 +757,10 @@ script.on_event(defines.events.on_object_destroyed, on_destroyed)
 script.on_nth_tick(REFILL_INTERVAL, on_refill)
 
 script.on_init(rebuild)
-script.on_configuration_changed(rebuild)
+script.on_configuration_changed(function()
+  rebuild()
+  trim_grids()
+end)
 script.on_load(function()
   if next(storage.rigs) then script.on_event(defines.events.on_tick, on_tick) end
 end)
