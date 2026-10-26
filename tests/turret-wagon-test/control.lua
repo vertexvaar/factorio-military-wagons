@@ -403,6 +403,25 @@ local function setup()
   -- an empty wagon must not do anything bad
   rail_line(surface, true, -101, -41, 41)
   s.empty = train(surface, true, -101, 0)
+
+  -- J: cannon wagons with explosive shells spare their own buildings, behind the targets
+  -- and where the shells that fly on end (40 tiles out)
+  if SPEC.ammo == "cannon-shell" then
+    rail_line(surface, false, -150, 111, 149)
+    s.j = train(surface, false, -150, 125)
+    s.j.insert({ name = "explosive-cannon-shell", count = 20 })
+    s.j_own = {}
+    local function own(name, x, y)
+      s.j_own[#s.j_own + 1] = surface.create_entity({ name = name, position = { x, y }, force = "player" })
+    end
+    for _, y in pairs({ -150 + SPEC.distance + 4, -113, -110 }) do
+      for x = 119, 131, 2 do
+        own("wooden-chest", x, y)
+        own("stone-wall", x, y + 1)
+        own("small-electric-pole", x + 1, y)
+      end
+    end
+  end
 end
 
 local function check_loaded()
@@ -433,6 +452,14 @@ local function spawn_enemies()
     s.a_enemies[#s.a_enemies + 1] = biter
   end
   report(alive(s.a_enemies) == 5, "enemies spawned near the standing train")
+  if s.j then
+    s.j_enemies = {}
+    for x = 119, 131, 4 do
+      local biter = s.surface.create_entity({ name = "small-biter", force = "enemy", position = { x, -150 + SPEC.distance } })
+      biter.commandable.set_command({ type = defines.command.stop, ticks_to_wait = 100000 })
+      s.j_enemies[#s.j_enemies + 1] = biter
+    end
+  end
 end
 
 local function spawn_track_enemies()
@@ -545,6 +572,14 @@ script.on_event(defines.events.on_tick, function()
     end
     local count = s.surface.count_entities_filtered({ name = names })
     report(count == expected, "no orphaned turrets", count .. " turrets, " .. expected .. " expected")
+    if s.j then
+      local damaged = 0
+      for _, e in pairs(s.j_own) do
+        if not e.valid or e.health < e.max_health then damaged = damaged + 1 end
+      end
+      report(alive(s.j_enemies) < #s.j_enemies, "explosive shells kill enemies", alive(s.j_enemies) .. " left")
+      report(damaged == 0, "explosive shells spare own buildings", damaged .. " of " .. #s.j_own .. " damaged")
+    end
     if s.mine then
       local at_flare = s.surface.count_entities_filtered({ name = "land-mine", position = { -111, 10 }, radius = 4 })
       local at_artillery =
