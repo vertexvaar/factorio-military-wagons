@@ -22,6 +22,17 @@ end
 if data.raw["ammo-turret"]["twin-cannon-wagon-turret"] or data.raw["ammo-turret"]["howitzer-wagon-turret"] then
   data:extend({ { type = "ammo-category", name = config.shell_category, hidden = true } })
 
+  -- every trigger in a copy's actions (impact and the explosion at the end) spares its own side
+  local function spare(node)
+    if type(node) ~= "table" then return end
+    if node.type == "area" or node.type == "direct" or node.type == "line" or node.type == "cluster" then
+      node.force = "not-same"
+    end
+    for _, child in pairs(node) do
+      spare(child)
+    end
+  end
+
   -- points every projectile in an ammo type at its copy, made on first use
   local function own_side(node)
     if type(node) ~= "table" then return end
@@ -33,6 +44,8 @@ if data.raw["ammo-turret"]["twin-cannon-wagon-turret"] or data.raw["ammo-turret"
         projectile.force_condition = "not-same"
         -- flies on along its line through the target point, like vtk-cannon-turret's shells
         projectile.direction_only = true
+        spare(projectile.action)
+        spare(projectile.final_action)
         data:extend({ projectile })
       end
       node.projectile = copy

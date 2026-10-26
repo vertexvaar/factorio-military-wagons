@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.1
+Date: 2026-10-26
+  Bugfixes:
+    - Explosive shells from the cannon wagons no longer damage your own buildings, trains and walls. Their explosions now spare your side like their impact already did.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.0
 Date: 2026-10-25
   Features:
