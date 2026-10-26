@@ -9,6 +9,7 @@ Usage:
   python tools/publish.py details        updates description, category, tags, license and source link
   python tools/publish.py images         uploads the gallery images and sets their order
 """
+import hashlib
 import json
 import os
 import sys
@@ -91,11 +92,25 @@ def details():
     print("details:", result.get("success", result))
 
 
+def portal_images():
+    """IDs of the images the mod page has already; an image's ID is the SHA1 of its file."""
+    try:
+        with urllib.request.urlopen("https://mods.factorio.com/api/mods/%s/full" % INFO["name"]) as r:
+            return {image["id"] for image in json.loads(r.read().decode()).get("images", [])}
+    except urllib.error.HTTPError:
+        return set()
+
+
 def images():
+    # the portal refuses an image it has already, so only new ones are uploaded
+    existing = portal_images()
     ids = []
     for image in IMAGES:
-        upload_url = request(API + "images/add", {"mod": INFO["name"]})["upload_url"]
-        ids.append(request(upload_url, files={"image": os.path.join(ROOT, image)}, auth=False)["id"])
+        image_id = hashlib.sha1(open(os.path.join(ROOT, image), "rb").read()).hexdigest()
+        if image_id not in existing:
+            upload_url = request(API + "images/add", {"mod": INFO["name"]})["upload_url"]
+            image_id = request(upload_url, files={"image": os.path.join(ROOT, image)}, auth=False)["id"]
+        ids.append(image_id)
     print("images:", request(API + "images/edit", {"mod": INFO["name"], "images": ",".join(ids)}).get("success"))
 
 

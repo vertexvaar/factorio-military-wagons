@@ -1,4 +1,18 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.0
+Date: 2026-10-26
+  Balancing:
+    - The equipment grid of the military wagons is 6x8 like the tank's (was 16x16), so it no longer takes far more equipment than a tank.
+    - Military wagons have 2000 health like the tank (was 1000).
+    - Armour plates are 2x2 like an energy shield (were 4x4), with recipes a quarter of the size. A grid full of plates now protects about as well as one full of shields with a reactor, but only against its damage type and without power.
+    - Plate values per plate: composite 0.5 flat / 4 %, reactive, acid and fire 5 %, tungsten plates 6 to 7 %.
+    - Better quality makes a plate stronger, like a shield: +30 % per quality level.
+    - Equipment in old saves that no longer fits into the smaller grid is put into the wagon's cargo, or on the ground next to it.
+  Graphics:
+    - New, more detailed armour plate graphics: welded seams, bolts, dents, rust, scorched tiles, acid stains.
+  Bugfixes:
+    - Explosive shells from the cannon wagons no longer damage your own buildings, trains and walls. Their explosions now spare your side like their impact already did.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.0
 Date: 2026-10-25
   Features:

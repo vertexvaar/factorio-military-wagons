@@ -151,7 +151,8 @@ end
 
 -- Standard rolling stock armour for the turret wagons.
 function rig.armour(wagon)
-  wagon.max_health = 1000
+  -- as much as a tank
+  wagon.max_health = 2000
   wagon.resistances = {
     { type = "physical", decrease = 5, percent = 30 },
     { type = "explosion", decrease = 10, percent = 30 },

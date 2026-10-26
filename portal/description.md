@@ -15,11 +15,12 @@ The cannon wagons fire their own copies of the tank shells. Those fly through yo
 
 ## Armour
 
-Every military wagon has a 16x16 equipment grid. It takes everything a tank's grid takes, plus armour plates. The plates fit into military wagons only.
+Every military wagon has a 6x8 equipment grid and 2000 health, like a tank. The grid takes everything a tank's grid takes, plus armour plates. The 2x2 plates fit into military wagons only.
 
 - Armour steel: 4 steel, 1 copper, 2 carbon and 20 water in a chemical plant. Without Space Age, carbon is made from coal.
 - Composite, reactive, acid and fire plates protect against physical, explosion, acid and fire damage.
 - With Space Age, three tungsten plates protect more and against several damage types at once.
+- A grid full of plates protects about as well as a reactor with shields, but needs no power and works only against its damage type. Better quality makes plates stronger, like shields.
 - The protection of all plates adds up to at most 80 %.
 
 ## Wagon panel

@@ -23,20 +23,22 @@ their vanilla counterparts, also while the train is moving, and reload from the 
 
 ## Armour
 
-All military wagons have a 16x16 equipment grid. It takes everything a tank's grid takes, plus armour plates
-(4x4), which fit into military wagons only. Plates are made from armour steel (4 steel, 1 copper, 2 carbon,
-20 water in a chemical plant; without Space Age carbon comes from coal).
+All military wagons have a 6x8 equipment grid and 2000 health, like a tank. The grid takes everything a tank's
+grid takes, plus armour plates (2x2, like an energy shield), which fit into military wagons only. Plates are made
+from armour steel (4 steel, 1 copper, 2 carbon, 20 water in a chemical plant; without Space Age carbon comes from coal).
 
 | Plate | Protection per plate | Space Age |
 |---|---|---|
-| Composite | physical 1 flat, 5 % | |
-| Reactive | explosion 3 flat, 6 % | |
-| Acid | acid 1 flat, 6 % | |
-| Fire | fire 2 flat, 6 % | |
-| Tungsten carbide | physical 2 / 9 %, acid 3 %, fire 4 % | yes |
-| Tungsten reactive | explosion 6 / 10 %, physical 0.5 / 3 % | yes |
-| Tungsten carbide acid | acid 2 / 12 %, fire 4 % | yes |
+| Composite | physical 0.5 flat, 4 % | |
+| Reactive | explosion 1.5 flat, 5 % | |
+| Acid | acid 0.5 flat, 5 % | |
+| Fire | fire 1 flat, 5 % | |
+| Tungsten carbide | physical 1 / 6 %, acid 2 %, fire 3 % | yes |
+| Tungsten reactive | explosion 3 / 7 %, physical 2 % | yes |
+| Tungsten carbide acid | acid 1 / 7 %, fire 3 % | yes |
 
+A grid full of composite plates (12) takes 39 % off physical damage, about as much as a reactor and eight
+MK2 shields add, but without power and only against its damage type. Better quality: +30 % per level.
 Flat values add up, percentages stack multiplicatively, capped at 80 %. Equipment cannot give a vehicle
 resistances, so the script heals the plates' share back after every hit, lethal hits included.
 

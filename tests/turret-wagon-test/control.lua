@@ -302,13 +302,14 @@ local function setup()
   rail_line(surface, true, -121, -41, 41)
   local h = train(surface, true, -121, 0)
   local grid = h.grid
-  report(grid and grid.width == 16 and grid.height == 16, "wagon has a 16x16 equipment grid")
+  report(grid and grid.width == 6 and grid.height == 8, "wagon has a 6x8 equipment grid")
+  report(h.max_health == 2000, "wagon has as much health as a tank", tostring(h.max_health))
   report(grid and grid.put({ name = "energy-shield-equipment" }) ~= nil, "grid takes tank equipment")
   -- bare wagon: physical 5 / 30 %, so 100 damage does 66.5
   h.damage(100, "enemy", "physical")
-  report(math.abs(h.health - 933.5) < 0.01, "unplated wagon takes its normal damage", string.format("%.2f", h.health))
-  h.health = 1000
-  -- four composite plates: physical 4 / 1 - 0.95^4 on top, (66.5 - 4) * 0.95^4 = 50.907
+  report(math.abs(h.health - 1933.5) < 0.01, "unplated wagon takes its normal damage", string.format("%.2f", h.health))
+  h.health = 2000
+  -- four composite plates: physical 4 * 0.5 / 1 - 0.96^4 on top, (66.5 - 2) * 0.96^4
   local plates = {}
   for k = 1, 4 do
     plates[k] = grid and grid.put({ name = "composite-armor-plate" })
@@ -316,41 +317,53 @@ local function setup()
   report(plates[4] ~= nil, "grid takes four armour plates")
   h.damage(100, "enemy", "physical")
   report(
-    math.abs(h.health - (1000 - 62.5 * 0.95 ^ 4)) < 0.01,
+    math.abs(h.health - (2000 - 64.5 * 0.96 ^ 4)) < 0.01,
     "armour plates reduce physical damage",
     string.format("%.2f", h.health)
   )
-  h.health = 1000
+  h.health = 2000
   h.damage(100, "enemy", "explosion")
   report(
-    math.abs(h.health - 937) < 0.01,
+    math.abs(h.health - 1937) < 0.01,
     "armour plates leave other damage types alone",
     string.format("%.2f", h.health)
   )
   -- a hit that would destroy the bare wagon but not the plated one
-  -- brought down by hits, so the mod knows its health: explosion (1360 - 10) * 0.7 = 945
-  h.health = 1000
-  h.damage(1360, "enemy", "explosion")
+  -- brought down by hits, so the mod knows its health: explosion (2780 - 10) * 0.7 = 1939
+  h.health = 2000
+  h.damage(2780, "enemy", "explosion")
   h.damage(100, "enemy", "physical")
   report(
-    h.valid and math.abs(h.health - (55 - 62.5 * 0.95 ^ 4)) < 0.01,
+    h.valid and math.abs(h.health - (61 - 64.5 * 0.96 ^ 4)) < 0.01,
     "armour plates catch a hit that would be lethal",
     h.valid and string.format("%.2f", h.health) or "destroyed"
   )
   if h.valid then
-    h.health = 1000
+    h.health = 2000
     for _, plate in pairs(plates) do
       grid.take({ equipment = plate })
     end
     h.damage(100, "enemy", "physical")
-    report(math.abs(h.health - 933.5) < 0.01, "removed plates stop protecting", string.format("%.2f", h.health))
-    -- two reactive plates: explosion (63 - 6) * 0.94^2 = 50.37
-    h.health = 1000
+    report(math.abs(h.health - 1933.5) < 0.01, "removed plates stop protecting", string.format("%.2f", h.health))
+    -- better quality, stronger plate: uncommon is level 1, so 0.65 flat and 5.2 %
+    if prototypes.quality["uncommon"] then
+      h.health = 2000
+      local better = grid.put({ name = "composite-armor-plate", quality = "uncommon" })
+      h.damage(100, "enemy", "physical")
+      report(
+        math.abs(h.health - (2000 - 65.85 * 0.948)) < 0.01,
+        "better quality plates protect more",
+        string.format("%.2f", h.health)
+      )
+      grid.take({ equipment = better })
+    end
+    -- two reactive plates: explosion (63 - 3) * 0.95^2
+    h.health = 2000
     grid.put({ name = "reactive-armor-plate" })
     grid.put({ name = "reactive-armor-plate" })
     h.damage(100, "enemy", "explosion")
     report(
-      math.abs(h.health - (1000 - 57 * 0.94 ^ 2)) < 0.01,
+      math.abs(h.health - (2000 - 60 * 0.95 ^ 2)) < 0.01,
       "reactive plates reduce explosion damage",
       string.format("%.2f", h.health)
     )
@@ -403,6 +416,25 @@ local function setup()
   -- an empty wagon must not do anything bad
   rail_line(surface, true, -101, -41, 41)
   s.empty = train(surface, true, -101, 0)
+
+  -- J: cannon wagons with explosive shells spare their own buildings, behind the targets
+  -- and where the shells that fly on end (40 tiles out)
+  if SPEC.ammo == "cannon-shell" then
+    rail_line(surface, false, -150, 111, 149)
+    s.j = train(surface, false, -150, 125)
+    s.j.insert({ name = "explosive-cannon-shell", count = 20 })
+    s.j_own = {}
+    local function own(name, x, y)
+      s.j_own[#s.j_own + 1] = surface.create_entity({ name = name, position = { x, y }, force = "player" })
+    end
+    for _, y in pairs({ -150 + SPEC.distance + 4, -113, -110 }) do
+      for x = 119, 131, 2 do
+        own("wooden-chest", x, y)
+        own("stone-wall", x, y + 1)
+        own("small-electric-pole", x + 1, y)
+      end
+    end
+  end
 end
 
 local function check_loaded()
@@ -433,6 +465,14 @@ local function spawn_enemies()
     s.a_enemies[#s.a_enemies + 1] = biter
   end
   report(alive(s.a_enemies) == 5, "enemies spawned near the standing train")
+  if s.j then
+    s.j_enemies = {}
+    for x = 119, 131, 4 do
+      local biter = s.surface.create_entity({ name = "small-biter", force = "enemy", position = { x, -150 + SPEC.distance } })
+      biter.commandable.set_command({ type = defines.command.stop, ticks_to_wait = 100000 })
+      s.j_enemies[#s.j_enemies + 1] = biter
+    end
+  end
 end
 
 local function spawn_track_enemies()
@@ -545,6 +585,14 @@ script.on_event(defines.events.on_tick, function()
     end
     local count = s.surface.count_entities_filtered({ name = names })
     report(count == expected, "no orphaned turrets", count .. " turrets, " .. expected .. " expected")
+    if s.j then
+      local damaged = 0
+      for _, e in pairs(s.j_own) do
+        if not e.valid or e.health < e.max_health then damaged = damaged + 1 end
+      end
+      report(alive(s.j_enemies) < #s.j_enemies, "explosive shells kill enemies", alive(s.j_enemies) .. " left")
+      report(damaged == 0, "explosive shells spare own buildings", damaged .. " of " .. #s.j_own .. " damaged")
+    end
     if s.mine then
       local at_flare = s.surface.count_entities_filtered({ name = "land-mine", position = { -111, 10 }, radius = 4 })
       local at_artillery =
