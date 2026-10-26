@@ -17,8 +17,8 @@ data:extend({
   {
     type = "equipment-grid",
     name = config.grid,
-    width = 16,
-    height = 16,
+    width = config.grid_size.width,
+    height = config.grid_size.height,
     equipment_categories = { config.armor_category },
   },
 })
@@ -46,42 +46,42 @@ local TUNGSTEN = {
 local PLATES = {
   ["composite-armor-plate"] = {
     tint = STEEL_TINT,
-    ingredients = { { "armor-steel", 10 }, { "steel-plate", 5 } },
+    ingredients = { { "armor-steel", 3 }, { "steel-plate", 2 } },
     technology = "composite-armor-plate",
   },
   ["reactive-armor-plate"] = {
     tint = STEEL_TINT,
     badge = "__base__/graphics/icons/explosives.png",
-    ingredients = { { "armor-steel", 8 }, { "explosives", 4 } },
+    ingredients = { { "armor-steel", 2 }, { "explosives", 1 } },
     technology = "reactive-armor-plate",
   },
   ["acid-armor-plate"] = {
     tint = STEEL_TINT,
     badge = "__base__/graphics/icons/plastic-bar.png",
-    ingredients = { { "armor-steel", 8 }, { "plastic-bar", 10 } },
+    ingredients = { { "armor-steel", 2 }, { "plastic-bar", 3 } },
     technology = "acid-armor-plate",
   },
   ["fire-armor-plate"] = {
     tint = STEEL_TINT,
     badge = "__base__/graphics/icons/stone-brick.png",
-    ingredients = { { "armor-steel", 8 }, { "stone-brick", 10 } },
+    ingredients = { { "armor-steel", 2 }, { "stone-brick", 3 } },
     technology = "fire-armor-plate",
   },
   ["tungsten-carbide-armor-plate"] = {
     tint = TUNGSTEN_TINT,
-    ingredients = { { "armor-steel", 4 }, { "tungsten-carbide", 8 } },
+    ingredients = { { "armor-steel", 1 }, { "tungsten-carbide", 2 } },
     technology = "tungsten-armor-plates",
   },
   ["tungsten-reactive-armor-plate"] = {
     tint = TUNGSTEN_TINT,
     badge = "__base__/graphics/icons/explosives.png",
-    ingredients = { { "armor-steel", 4 }, { "tungsten-plate", 6 }, { "explosives", 4 } },
+    ingredients = { { "armor-steel", 1 }, { "tungsten-plate", 2 }, { "explosives", 1 } },
     technology = "tungsten-armor-plates",
   },
   ["tungsten-carbide-acid-armor-plate"] = {
     tint = TUNGSTEN_TINT,
     badge = "__base__/graphics/icons/plastic-bar.png",
-    ingredients = { { "armor-steel", 2 }, { "tungsten-carbide", 10 } },
+    ingredients = { { "armor-steel", 1 }, { "tungsten-carbide", 3 } },
     technology = "tungsten-armor-plates",
   },
 }
@@ -140,9 +140,9 @@ for order, entry in ipairs(config.plates) do
         type = "inventory-bonus-equipment",
         name = name,
         sprite = rendered[name]
-            and { filename = GRAPHICS .. name .. "-equipment.png", width = 256, height = 256, scale = 0.5 }
-          or { filename = PLATE_ICON, width = 64, height = 64, scale = 2, tint = plate.tint },
-        shape = { width = 4, height = 4, type = "full" },
+            and { filename = GRAPHICS .. name .. "-equipment.png", width = 128, height = 128, scale = 0.5 }
+          or { filename = PLATE_ICON, width = 64, height = 64, tint = plate.tint },
+        shape = { width = 2, height = 2, type = "full" },
         inventory_size_bonus = 0,
         categories = { config.armor_category },
       },
@@ -151,7 +151,7 @@ for order, entry in ipairs(config.plates) do
         name = name,
         -- tungsten plates also in the foundry
         categories = entry.space_age and { "metallurgy", "crafting" } or nil,
-        energy_required = entry.space_age and 15 or 10,
+        energy_required = entry.space_age and 4 or 3,
         enabled = false,
         ingredients = ingredients,
         results = { { type = "item", name = name, amount = 1 } },

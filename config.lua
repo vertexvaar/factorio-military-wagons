@@ -63,28 +63,32 @@ config.priority_slots = 8
 -- Several plates: the flat values add up, the percentages apply one after the other
 -- (two times 20 % make 36 %), capped at config.armor_cap.
 config.plates = {
-  { name = "composite-armor-plate", resistances = { physical = { 1, 5 } } },
-  { name = "reactive-armor-plate", resistances = { explosion = { 3, 6 } } },
-  { name = "acid-armor-plate", resistances = { acid = { 1, 6 } } },
-  { name = "fire-armor-plate", resistances = { fire = { 2, 6 } } },
+  { name = "composite-armor-plate", resistances = { physical = { 0.5, 4 } } },
+  { name = "reactive-armor-plate", resistances = { explosion = { 1.5, 5 } } },
+  { name = "acid-armor-plate", resistances = { acid = { 0.5, 5 } } },
+  { name = "fire-armor-plate", resistances = { fire = { 1, 5 } } },
   -- tungsten plates need Space Age
   {
     name = "tungsten-carbide-armor-plate",
-    resistances = { physical = { 2, 9 }, acid = { 0, 3 }, fire = { 0, 4 } },
+    resistances = { physical = { 1, 6 }, acid = { 0, 2 }, fire = { 0, 3 } },
     space_age = true,
   },
   {
     name = "tungsten-reactive-armor-plate",
-    resistances = { explosion = { 6, 10 }, physical = { 0.5, 3 } },
+    resistances = { explosion = { 3, 7 }, physical = { 0, 2 } },
     space_age = true,
   },
   {
     name = "tungsten-carbide-acid-armor-plate",
-    resistances = { acid = { 2, 12 }, fire = { 0, 4 } },
+    resistances = { acid = { 1, 7 }, fire = { 0, 3 } },
     space_age = true,
   },
 }
 config.armor_cap = 80
+-- each quality level makes a plate this much stronger (shields: 30 % more capacity per level)
+config.armor_quality_bonus = 0.3
+-- the wagons' equipment grid, like a tank's
+config.grid_size = { width = 6, height = 8 }
 
 -- Wagon turrets fire their own copies of the tank shells, which pass their own side:
 -- from a turret on a train, a shell starts among its own wagons. The copies are named

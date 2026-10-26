@@ -361,26 +361,29 @@ end
 -- is healed back right after a hit. A hit asks the grid only for the plates that
 -- resist its damage type; there is nothing to keep track of when plates come and go.
 
--- PLATES[damage type] = { { name, flat, factor }, ... }
+-- PLATES[damage type][plate name] = { flat, percent }
 local PLATES = {}
 for _, plate in pairs(config.plates) do
   -- the tungsten plates exist only with Space Age
   for damage_type, r in pairs(prototypes.equipment[plate.name] and plate.resistances or {}) do
     PLATES[damage_type] = PLATES[damage_type] or {}
-    table.insert(PLATES[damage_type], { name = plate.name, flat = r[1], factor = 1 - r[2] / 100 })
+    PLATES[damage_type][plate.name] = r
   end
 end
 local FLOOR = 1 - config.armor_cap / 100
 
 -- What the plates in a grid add against a damage type: flat decrease and the share of
--- the damage that is left (capped).
+-- the damage that is left (capped). Better quality makes a plate stronger, like a shield.
 local function plating(grid, damage_type)
   local flat, factor = 0, 1
-  for _, plate in pairs(PLATES[damage_type] or {}) do
-    local n = grid.count(plate.name)
-    if n > 0 then
-      flat = flat + n * plate.flat
-      factor = factor * plate.factor ^ n
+  local plates = PLATES[damage_type]
+  if not plates then return flat, factor end
+  for _, entry in pairs(grid.get_contents()) do
+    local r = plates[entry.name]
+    if r then
+      local bonus = 1 + config.armor_quality_bonus * prototypes.quality[entry.quality].level
+      flat = flat + entry.count * r[1] * bonus
+      factor = factor * (1 - math.min(r[2] * bonus, 100) / 100) ^ entry.count
     end
   end
   return flat, math.max(factor, FLOOR)

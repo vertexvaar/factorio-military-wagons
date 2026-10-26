@@ -302,13 +302,14 @@ local function setup()
   rail_line(surface, true, -121, -41, 41)
   local h = train(surface, true, -121, 0)
   local grid = h.grid
-  report(grid and grid.width == 16 and grid.height == 16, "wagon has a 16x16 equipment grid")
+  report(grid and grid.width == 6 and grid.height == 8, "wagon has a 6x8 equipment grid")
+  report(h.max_health == 2000, "wagon has as much health as a tank", tostring(h.max_health))
   report(grid and grid.put({ name = "energy-shield-equipment" }) ~= nil, "grid takes tank equipment")
   -- bare wagon: physical 5 / 30 %, so 100 damage does 66.5
   h.damage(100, "enemy", "physical")
-  report(math.abs(h.health - 933.5) < 0.01, "unplated wagon takes its normal damage", string.format("%.2f", h.health))
-  h.health = 1000
-  -- four composite plates: physical 4 / 1 - 0.95^4 on top, (66.5 - 4) * 0.95^4 = 50.907
+  report(math.abs(h.health - 1933.5) < 0.01, "unplated wagon takes its normal damage", string.format("%.2f", h.health))
+  h.health = 2000
+  -- four composite plates: physical 4 * 0.5 / 1 - 0.96^4 on top, (66.5 - 2) * 0.96^4
   local plates = {}
   for k = 1, 4 do
     plates[k] = grid and grid.put({ name = "composite-armor-plate" })
@@ -316,41 +317,53 @@ local function setup()
   report(plates[4] ~= nil, "grid takes four armour plates")
   h.damage(100, "enemy", "physical")
   report(
-    math.abs(h.health - (1000 - 62.5 * 0.95 ^ 4)) < 0.01,
+    math.abs(h.health - (2000 - 64.5 * 0.96 ^ 4)) < 0.01,
     "armour plates reduce physical damage",
     string.format("%.2f", h.health)
   )
-  h.health = 1000
+  h.health = 2000
   h.damage(100, "enemy", "explosion")
   report(
-    math.abs(h.health - 937) < 0.01,
+    math.abs(h.health - 1937) < 0.01,
     "armour plates leave other damage types alone",
     string.format("%.2f", h.health)
   )
   -- a hit that would destroy the bare wagon but not the plated one
-  -- brought down by hits, so the mod knows its health: explosion (1360 - 10) * 0.7 = 945
-  h.health = 1000
-  h.damage(1360, "enemy", "explosion")
+  -- brought down by hits, so the mod knows its health: explosion (2780 - 10) * 0.7 = 1939
+  h.health = 2000
+  h.damage(2780, "enemy", "explosion")
   h.damage(100, "enemy", "physical")
   report(
-    h.valid and math.abs(h.health - (55 - 62.5 * 0.95 ^ 4)) < 0.01,
+    h.valid and math.abs(h.health - (61 - 64.5 * 0.96 ^ 4)) < 0.01,
     "armour plates catch a hit that would be lethal",
     h.valid and string.format("%.2f", h.health) or "destroyed"
   )
   if h.valid then
-    h.health = 1000
+    h.health = 2000
     for _, plate in pairs(plates) do
       grid.take({ equipment = plate })
     end
     h.damage(100, "enemy", "physical")
-    report(math.abs(h.health - 933.5) < 0.01, "removed plates stop protecting", string.format("%.2f", h.health))
-    -- two reactive plates: explosion (63 - 6) * 0.94^2 = 50.37
-    h.health = 1000
+    report(math.abs(h.health - 1933.5) < 0.01, "removed plates stop protecting", string.format("%.2f", h.health))
+    -- better quality, stronger plate: uncommon is level 1, so 0.65 flat and 5.2 %
+    if prototypes.quality["uncommon"] then
+      h.health = 2000
+      local better = grid.put({ name = "composite-armor-plate", quality = "uncommon" })
+      h.damage(100, "enemy", "physical")
+      report(
+        math.abs(h.health - (2000 - 65.85 * 0.948)) < 0.01,
+        "better quality plates protect more",
+        string.format("%.2f", h.health)
+      )
+      grid.take({ equipment = better })
+    end
+    -- two reactive plates: explosion (63 - 3) * 0.95^2
+    h.health = 2000
     grid.put({ name = "reactive-armor-plate" })
     grid.put({ name = "reactive-armor-plate" })
     h.damage(100, "enemy", "explosion")
     report(
-      math.abs(h.health - (1000 - 57 * 0.94 ^ 2)) < 0.01,
+      math.abs(h.health - (2000 - 60 * 0.95 ^ 2)) < 0.01,
       "reactive plates reduce explosion damage",
       string.format("%.2f", h.health)
     )
