@@ -8,6 +8,9 @@ local graphics = require("prototypes.graphics")
 local CATEGORY = "wagon-mine"
 local RANGE = 120
 local MIN_RANGE = 16
+-- one thrown mine is a package of this many land mines, scattered around the target
+local MINES_PER_SHOT = 5
+local SCATTER = 2.5
 
 -- config: this wagon's entry in config.wagons
 return function(config)
@@ -27,6 +30,17 @@ return function(config)
   wagon.color = { r = 0.33, g = 0.35, b = 0.24, a = 1 }
   wagon.allow_manual_color = true
   wagon.factoriopedia_simulation = nil
+  -- the launcher baskets are part of the wagon picture and do not turn: no vanilla cannon
+  -- on the roof, and the aim needs no turning before a shot
+  wagon.cannon_base_pictures = nil
+  wagon.cannon_barrel_pictures = nil
+  wagon.cannon_base_shift_when_horizontal = 0
+  wagon.cannon_base_shift_when_vertical = 0
+  wagon.cannon_base_height = 1.9
+  wagon.cannon_parking_frame_count = 0
+  wagon.turret_rotation_speed = 1
+  wagon.turn_after_shooting_cooldown = 0
+  wagon.rotating_sound = nil
   rig.armour(wagon)
   local pictures = graphics.wagon_pictures(config.variant)
   if pictures then wagon.pictures = pictures end
@@ -46,8 +60,11 @@ return function(config)
   gun.attack_parameters.range = RANGE
   gun.attack_parameters.min_range = MIN_RANGE
   gun.attack_parameters.cooldown = 60
+  gun.attack_parameters.projectile_creation_distance = 0
+  gun.attack_parameters.projectile_center = { 0, 0 }
+  gun.attack_parameters.projectile_creation_parameters = nil
 
-  -- the mine flies like a shell and lands as an armed land mine of the wagon's force
+  -- the package flies like a shell and scatters armed land mines of the wagon's force
   local projectile = table.deepcopy(data.raw["artillery-projectile"]["artillery-projectile"])
   projectile.name = "wagon-mine-projectile"
   projectile.reveal_map = false
@@ -63,7 +80,15 @@ return function(config)
     action_delivery = {
       type = "instant",
       target_effects = {
-        { type = "create-entity", entity_name = "land-mine", check_buildability = true },
+        {
+          type = "create-entity",
+          entity_name = "land-mine",
+          repeat_count = MINES_PER_SHOT,
+          offset_deviation = { { -SCATTER, -SCATTER }, { SCATTER, SCATTER } },
+          find_non_colliding_position = true,
+          non_colliding_search_radius = 2,
+          check_buildability = true,
+        },
       },
     },
   }
@@ -127,7 +152,7 @@ return function(config)
       energy_required = 4,
       enabled = false,
       ingredients = {
-        { type = "item", name = "land-mine", amount = 1 },
+        { type = "item", name = "land-mine", amount = MINES_PER_SHOT },
         { type = "item", name = "explosives", amount = 1 },
       },
       results = { { type = "item", name = "wagon-mine", amount = 1 } },

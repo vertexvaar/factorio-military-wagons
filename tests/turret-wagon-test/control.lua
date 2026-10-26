@@ -594,10 +594,10 @@ script.on_event(defines.events.on_tick, function()
       report(damaged == 0, "explosive shells spare own buildings", damaged .. " of " .. #s.j_own .. " damaged")
     end
     if s.mine then
-      local at_flare = s.surface.count_entities_filtered({ name = "land-mine", position = { -111, 10 }, radius = 4 })
+      local at_flare = s.surface.count_entities_filtered({ name = "land-mine", position = { -111, 10 }, radius = 6 })
       local at_artillery =
         s.surface.count_entities_filtered({ name = "land-mine", position = { -111, -10 }, radius = 4 })
-      report(at_flare == 1, "mine launcher throws one mine at its flare", at_flare .. " mines")
+      report(at_flare == 5, "mine launcher scatters five mines at its flare", at_flare .. " mines")
       report(at_artillery == 0, "mine launcher ignores artillery flares", at_artillery .. " mines")
     end
     log("WAGONTEST DONE")

@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.1
+Date: 2026-10-26
+  Changes:
+    - A thrown mine is now a package of 5 land mines (recipe: 5 land mines and 1 explosives). On impact the mines scatter around the target.
+  Bugfixes:
+    - The mine launcher wagon no longer shows a vanilla artillery cannon floating next to it. The launcher baskets on the wagon fire the mines.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.0
 Date: 2026-10-26
   Balancing:

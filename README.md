@@ -10,7 +10,7 @@ their vanilla counterparts, also while the train is moving, and reload from the 
 | Rocket wagon | cargo wagon, 10 slots | 2 rocket launchers, range 36, min. range 8 | rockets, 10 per launcher |
 | Twin cannon wagon | cargo wagon, 10 slots | 2 tank cannons, all round | cannon shells |
 | Howitzer wagon | cargo wagon, 10 slots | 1 long gun, range 36, min. range 12, half rate of fire | cannon shells |
-| Mine launcher wagon | artillery wagon | mine launcher, range 120, min. range 16, aimed with its remote | wagon mines (land mine + explosives) |
+| Mine launcher wagon | artillery wagon | mine launcher, range 120, min. range 16, aimed with its remote | wagon mines (5 land mines + explosives, scattered on impact) |
 
 - Each wagon can be switched off in the startup settings. A switched-off wagon has no entity, recipe or
   technology. Wagons of that kind already on the map are removed when the save is loaded.
