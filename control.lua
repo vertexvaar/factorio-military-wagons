@@ -46,8 +46,15 @@ end
 -- Where the wagon's drawn front points. Most wagon sprites have back equal to front, so a
 -- wagon turned round (orientation + 0.5) is drawn the same; the mounts follow the drawing.
 -- Wagons rendered all the way round (kind.full_turn) are drawn as they are turned.
-local function drawn(kind, orientation) return kind.full_turn and orientation % 1 or orientation % 0.5 end
-local function front(wagon) return drawn(KINDS[wagon.name], wagon.orientation) end
+-- The game picks the nearest of 256 directions; with back equal to front, directions 128..255
+-- show the sprite of the opposite one. Taking the half from that pick (not orientation % 0.5)
+-- keeps wagons running north-south, which wobble around 0.5 and 1, from flipping their mounts.
+local function drawn(kind, orientation)
+  if kind.full_turn then return orientation % 1 end
+  local half = math.floor(orientation * 256 + 0.5) % 256 >= 128
+  return half and orientation - 0.5 or orientation
+end
+local function front(wagon) return drawn(KINDS[wagon.name], wagon.orientation) % 1 end
 
 -- Without elevated rails every wagon is on the ground.
 local ELEVATED_RAILS = script.active_mods["elevated-rails"] ~= nil
@@ -215,7 +222,7 @@ local function place(rig, predict)
       -- on the move the baskets are off and face the wagon's front; if the train set off
       -- before they were home (a train the lock does not hold), they jump there
       if not turret.disabled_by_script then turret.disabled_by_script = true end
-      turret.relative_turret_orientation = o
+      turret.relative_turret_orientation = o % 1
     end
   end
   if kind.park_speed and predict then
