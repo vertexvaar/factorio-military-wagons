@@ -23,6 +23,35 @@ local function rail_line(surface, vertical, fixed, from, to)
   end
 end
 
+-- A closed loop: a straight going north at x from y1 to y0, a right U-turn, the same
+-- straight back south and a second U-turn onto the start (as in the test harness).
+local function rail_loop(surface, x, y0, y1)
+  rail_line(surface, true, x, y0 + 1, y1 - 1)
+  local first = surface.find_entities_filtered({ name = "straight-rail", position = { x, y0 + 1 } })[1]
+  local head = first.get_rail_end(defines.rail_direction.front)
+  if head.location.direction ~= defines.direction.north then head = first.get_rail_end(defines.rail_direction.back) end
+  local function extend(direction)
+    for _, ext in pairs(head.get_rail_extensions("rail")) do
+      if ext.goal.direction == direction then
+        surface.create_entity({ name = ext.name, position = ext.position, direction = ext.direction, force = "player" })
+        return head.move_natural()
+      end
+    end
+    return false
+  end
+  local function u_turn()
+    local target = (head.location.direction + 8) % 16
+    while head.location.direction ~= target do
+      if not extend((head.location.direction + 1) % 16) then return end
+    end
+  end
+  u_turn()
+  for _ = 1, (y1 - y0) / 2 do
+    extend(head.location.direction)
+  end
+  u_turn()
+end
+
 local function train(surface, vertical, fixed, wagon_at)
   local dir = vertical and defines.direction.north or defines.direction.east
   local loco_at = vertical and wagon_at - 7 or wagon_at + 7
@@ -83,8 +112,17 @@ local function setup()
   rail_line(surface, true, 121, -31, 31)
   train(surface, true, 121, 0)
   local trees = {
-    { -2.5, -33.5 }, { 2.5, -34 }, { -1.5, -28.5 }, { 1.5, -28 }, { 4, -29 },
-    { 119, -3 }, { 123, 1.5 }, { 119.5, 2.5 }, { 122.5, -2 }, { 121.5, 4.5 }, { 120.5, -5 },
+    { -2.5, -33.5 },
+    { 2.5, -34 },
+    { -1.5, -28.5 },
+    { 1.5, -28 },
+    { 4, -29 },
+    { 119, -3 },
+    { 123, 1.5 },
+    { 119.5, 2.5 },
+    { 122.5, -2 },
+    { 121.5, 4.5 },
+    { 120.5, -5 },
   }
   for _, p in pairs(trees) do
     surface.create_entity({ name = "tree-01", position = p })
@@ -124,6 +162,27 @@ local function setup()
       raise_built = true,
     })
     s.mine.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 20 })
+    -- a second one on a loop, four baskets of six loaded, that stops in the curve; a force
+    -- of its own so it leaves the first one's flares alone
+    rail_loop(surface, -91, 50, 76)
+    local force = game.forces["wagon-loop"] or game.create_force("wagon-loop")
+    force.set_friend("player", true)
+    game.forces.player.set_friend(force, true)
+    s.curve_loco = surface.create_entity({
+      name = "locomotive",
+      force = force,
+      direction = defines.direction.north,
+      position = { -91, 56 },
+    })
+    s.curve = surface.create_entity({
+      name = "mine-launcher-wagon",
+      force = force,
+      direction = defines.direction.north,
+      position = { -91, 63 },
+      raise_built = true,
+    })
+    s.curve.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 4 })
+    s.curve_loco.train.manual_mode = true
   end
   storage.s = s
 end
@@ -148,7 +207,8 @@ script.on_event(defines.events.on_tick, function()
   if age == 60 or age == 150 then biters(s.surface, -6, 1 + SPEC.distance, 6) end
   if age == 100 then biters(s.surface, 40, -61 - SPEC.distance, 6) end
   -- flares for the mine launcher, a few at a time so mines are in the air and on the ground
-  local flares = { [20] = { -100, -8 }, [40] = { -97, 4 }, [60] = { -104, 12 }, [80] = { -94, -2 }, [100] = { -101, -14 } }
+  local flares =
+    { [20] = { -100, -8 }, [40] = { -97, 4 }, [60] = { -104, 12 }, [80] = { -94, -2 }, [100] = { -101, -14 } }
   if s.mine and flares[age] then
     s.surface.create_entity({
       name = "mine-launcher-flare",
@@ -180,16 +240,39 @@ script.on_event(defines.events.on_tick, function()
       shots[t] = { "mine-launcher-" .. t, { -108, 0 }, 1 }
     end
   end
+  -- close-ups in alt mode (entity info): ammo in the turrets after the first refill
+  shots[40] = { "standing-alt", { 0, 0 }, 2, true }
+  if s.mine then
+    shots[42] = { "mine-launcher-alt", { -121, 0 }, 3, true }
+    shots[44] = { "mine-launcher-close", { -121, 0 }, 3 }
+    shots[90] = { "mine-curve-standing-alt", "curve", 3, true }
+    -- the loop train sets off, and stops once the launcher is diagonal in the curve
+    if age == 100 then s.curve_loco.train.speed = 0.15 end
+    if age > 100 and not s.curve_stop and s.curve_loco.train.speed < 0.15 then s.curve_loco.train.speed = 0.15 end
+    if not s.curve_stop and s.curve.orientation > 0.04 and s.curve.orientation < 0.5 and not s.curve_moving then
+      s.curve_moving = age
+      shots[age] = { "mine-curve-moving-alt", "curve", 3, true }
+    end
+    if not s.curve_stop and s.curve.orientation >= 0.115 and s.curve.orientation < 0.5 then
+      s.curve_stop = age
+      s.curve_loco.train.speed = 0
+    end
+    if s.curve_stop and age == s.curve_stop + 5 then
+      shots[age] = { "mine-curve-alt", "curve", 3, true }
+      log("WAGONSHOT curve launcher orientation " .. s.curve.orientation)
+    end
+    if s.curve_stop and age == s.curve_stop + 6 then shots[age] = { "mine-curve", "curve", 3 } end
+  end
   local shot = shots[age]
   if shot then
-    local position = shot[2] == "b" and s.b.position or shot[2]
+    local position = shot[2] == "b" and s.b.position or shot[2] == "curve" and s.curve.position or shot[2]
     game.take_screenshot({
       surface = s.surface,
       position = position,
       resolution = { 1600, 900 },
       zoom = shot[3],
       path = "wagon-shots/" .. shot[1] .. ".png",
-      show_entity_info = false,
+      show_entity_info = shot[4] or false,
       allow_in_replay = true,
       anti_alias = true,
     })
