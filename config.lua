@@ -57,7 +57,7 @@ config.wagons = {
     variant = "mine",
     fluid = false,
     -- { along, across }: two rows of three, the across offset to the right of the front
-    mounts = { { -1.62, -0.5 }, { -1.0, -0.5 }, { -0.38, -0.5 }, { -1.62, 0.5 }, { -1.0, 0.5 }, { -0.38, 0.5 } },
+    mounts = { { -2.05, -0.47 }, { -0.95, -0.47 }, { 0.15, -0.47 }, { -2.05, 0.47 }, { -0.95, 0.47 }, { 0.15, 0.47 } },
     -- one package per basket, so a few packages spread over all baskets
     refill = 1,
     -- the baskets take their own copy of the wagon mines (see prototypes/mine.lua)
