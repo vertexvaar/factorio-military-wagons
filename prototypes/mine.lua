@@ -203,16 +203,29 @@ return function(config)
       },
       results = { { type = "item", name = "wagon-mine", amount = 1 } },
     },
+    -- like the artillery remote: no recipe, the shortcut bar puts it in the cursor
     {
-      type = "recipe",
-      name = "mine-launcher-remote",
-      energy_required = 1,
-      enabled = false,
-      ingredients = {
-        { type = "item", name = "electronic-circuit", amount = 1 },
-        { type = "item", name = "land-mine", amount = 1 },
+      type = "shortcut",
+      name = "give-mine-launcher-remote",
+      order = "e[spidertron-remote]-m[mine-launcher-remote]",
+      action = "spawn-item",
+      technology_to_unlock = config.name,
+      unavailable_until_unlocked = true,
+      item_to_spawn = "mine-launcher-remote",
+      icons = {
+        {
+          icon = "__base__/graphics/icons/shortcut-toolbar/mip/artillery-targeting-remote-x56.png",
+          icon_size = 56,
+          tint = { 1, 0.75, 0.4 },
+        },
       },
-      results = { { type = "item", name = "mine-launcher-remote", amount = 1 } },
+      small_icons = {
+        {
+          icon = "__base__/graphics/icons/shortcut-toolbar/mip/artillery-targeting-remote-x24.png",
+          icon_size = 24,
+          tint = { 1, 0.75, 0.4 },
+        },
+      },
     },
     {
       type = "recipe",
@@ -237,7 +250,6 @@ return function(config)
       effects = {
         { type = "unlock-recipe", recipe = config.name },
         { type = "unlock-recipe", recipe = "wagon-mine" },
-        { type = "unlock-recipe", recipe = "mine-launcher-remote" },
       },
       prerequisites = { "railway", "land-mine", "explosives" },
       unit = tech_units,
