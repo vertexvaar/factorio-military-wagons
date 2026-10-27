@@ -137,7 +137,8 @@ local function mount(wagon, offset)
   if type(offset) == "table" then
     along, across = offset[1], offset[2]
   end
-  local a = wagon.orientation * 2 * math.pi
+  -- the wagon sprites have back equal to front: the mounts follow the drawn front
+  local a = (wagon.orientation % 0.5) * 2 * math.pi
   -- the mod mounts on the drawn wagon and foreshortens north-south offsets like its sprite
   local draw = wagon.draw_data.position
   local f = math.sin(math.rad(50))
@@ -556,6 +557,45 @@ local function setup()
     end
     s.p.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 6 })
     s.p_moving_shots = 0
+
+    -- R: a basket still turning towards a flare, not fired yet, when the train is sent off; a
+    -- force of its own, so P's baskets leave its flare alone
+    rail_line(surface, false, -141, -81, 41)
+    s.r_force = game.forces["wagon-lock"] or game.create_force("wagon-lock")
+    s.r_force.set_friend("player", true)
+    game.forces.player.set_friend(s.r_force, true)
+    local r_loco = surface.create_entity({
+      name = "locomotive",
+      force = s.r_force,
+      direction = defines.direction.east,
+      position = { -33, -141 },
+    })
+    r_loco.get_fuel_inventory().insert({ name = "coal", count = 20 })
+    s.r = surface.create_entity({
+      name = "mine-launcher-wagon",
+      force = s.r_force,
+      direction = defines.direction.east,
+      position = { -40, -141 },
+      raise_built = true,
+    })
+    r_loco.train.manual_mode = true
+    s.r_target = surface.find_entities_filtered({ name = "straight-rail", position = { -11, -141 } })[1]
+    s.r.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 6 })
+
+    -- S: a mine launcher facing south (orientation 0.5), drawn like one facing north
+    rail_line(surface, true, 81, -41, 41)
+    s.south = surface.create_entity({
+      name = "mine-launcher-wagon",
+      force = "player",
+      direction = defines.direction.south,
+      position = { 81, 0 },
+      raise_built = true,
+    })
+    report(
+      deviation(s.south) < 0.01,
+      "baskets of a wagon facing south sit on the drawn mounts",
+      string.format("orientation %.2f, %.3f off the mounts", s.south.orientation, deviation(s.south))
+    )
   end
 
   -- an empty wagon must not do anything bad
@@ -626,14 +666,17 @@ local LOOP_LIMIT = 0.05
 local LOOP_FLARE = { 80, -40 }
 -- the last tick the test waits for the loop train (tests/run.py runs a few more)
 local LOOP_TICKS = 3900
+-- R: the tick of the flare behind the wagon, and of sending the train off
+local R_FLARE = 400
+local R_SEND = 420
 -- how long a train may wait for its baskets to turn home
 local PARK_LIMIT = 120
 
-local function flare(position)
+local function flare(position, force)
   storage.scene.surface.create_entity({
     name = "mine-launcher-flare",
     position = position,
-    force = "player",
+    force = force or "player",
     movement = { 0, 0 },
     height = 0,
     vertical_speed = 0,
@@ -659,11 +702,11 @@ local function send(train, rail, ticks)
   schedule.go_to_station(1)
 end
 
--- How far the basket furthest from home is turned away from the wagon's direction (turns).
+-- How far the basket furthest from home is turned away from the wagon's drawn front (turns).
 local function basket_offset(wagon)
   local worst = 0
   for _, t in pairs(turrets(wagon)) do
-    local d = (t.relative_turret_orientation - wagon.orientation) % 1
+    local d = (t.relative_turret_orientation - wagon.orientation % 0.5) % 1
     worst = math.max(worst, math.min(d, 1 - d))
   end
   return worst
@@ -711,7 +754,7 @@ local function check_lock(age)
   if age > 150 and not s.q_left and s.q.speed ~= 0 then
     s.q_left = age
     report(
-      age - 150 <= 10,
+      age - 150 <= 5,
       "train without turned baskets leaves at once",
       string.format(
         "%d ticks; when sent off its baskets were up to %.3f from home, wagon cannon at %.3f",
@@ -727,11 +770,35 @@ local function check_lock(age)
     flare({ s.p.position.x - 10, -155 })
   end
   if s.p_arrived and not s.p_again and s.p_last_shot ~= s.p_shots_before then s.p_again = age end
+
+  -- R: flare behind the wagon at R_FLARE, sent off R_SEND ticks later
+  local r = packages(s.r)
+  if s.r_count and r < s.r_count and not s.r_shot then s.r_shot = age end
+  s.r_count = r
+  if age == R_FLARE then flare({ -100, -141 }, s.r_force) end
+  if age == R_SEND then
+    s.r_sent_offset = basket_offset(s.r)
+    report(
+      s.r_sent_offset > 0.002 and not s.r_shot,
+      "a basket is still turning, not fired, when its train is sent off",
+      string.format("baskets up to %.3f from home, shot at tick %s", s.r_sent_offset, tostring(s.r_shot))
+    )
+    send(s.r.train, s.r_target, 6000)
+  end
+  if age > R_SEND and not s.r_left and s.r.speed ~= 0 then
+    s.r_left = age
+    report(
+      basket_offset(s.r) <= 0.002 and age - R_SEND > 1,
+      "train with a basket turning waits until all baskets are home",
+      string.format("left after %d ticks, baskets %.4f from home", age - R_SEND, basket_offset(s.r))
+    )
+  end
 end
 
 local function report_lock()
   local s = storage.scene
   if not s.p then return end
+  if not s.r_left then report(false, "train with a basket turning waits until all baskets are home", "never left") end
   if not s.p_left then report(false, "train waits for its baskets to turn home, then leaves", "never left") end
   if not s.q_left then report(false, "train without turned baskets leaves at once", "never left") end
   report(s.p_moving_shots == 0, "baskets do not fire while their train moves", s.p_moving_shots .. " shots")
@@ -763,6 +830,18 @@ local function drive_loop(age)
   if s.l_last and (s.l_phase == "forward" or s.l_phase == "backward") and s.l_started and age > s.l_started + 5 then
     for i, wagon in pairs(s.l_wagons) do
       local d = deviation(wagon, s.l_last[i])
+      if d > 0.5 then
+        log(
+          string.format(
+            "WAGONDEBUG loop tick %d %s orientation %.6f last %.6f off %.3f",
+            age,
+            wagon.name,
+            wagon.orientation,
+            s.l_last_o and s.l_last_o[i] or -1,
+            d
+          )
+        )
+      end
       local worst = s.l_worst[s.l_phase][wagon.name] or { d = 0, off = 0, ticks = 0 }
       s.l_worst[s.l_phase][wagon.name] = worst
       worst.ticks = worst.ticks + 1
@@ -773,8 +852,10 @@ local function drive_loop(age)
     end
   end
   s.l_last = {}
+  s.l_last_o = {}
   for i, wagon in pairs(s.l_wagons) do
     s.l_last[i] = positions(wagon)
+    s.l_last_o[i] = wagon.orientation
   end
   if s.l_orientation then
     local turn = lead.orientation - s.l_orientation

@@ -183,6 +183,16 @@ local function setup()
     })
     s.curve.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 4 })
     s.curve_loco.train.manual_mode = true
+    -- a third one facing south (orientation 0.5), of the loop's force too
+    rail_line(surface, true, -71, -19, 19)
+    s.south = surface.create_entity({
+      name = "mine-launcher-wagon",
+      force = force,
+      direction = defines.direction.south,
+      position = { -71, 0 },
+      raise_built = true,
+    })
+    s.south.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 4 })
   end
   storage.s = s
 end
@@ -246,6 +256,8 @@ script.on_event(defines.events.on_tick, function()
     shots[42] = { "mine-launcher-alt", { -121, 0 }, 3, true }
     shots[44] = { "mine-launcher-close", { -121, 0 }, 3 }
     shots[90] = { "mine-curve-standing-alt", "curve", 3, true }
+    shots[46] = { "mine-south-alt", { -71, 0 }, 3, true }
+    shots[48] = { "mine-south", { -71, 0 }, 3 }
     -- the loop train sets off, and stops once the launcher is diagonal in the curve
     if age == 100 then s.curve_loco.train.speed = 0.15 end
     if age > 100 and not s.curve_stop and s.curve_loco.train.speed < 0.15 then s.curve_loco.train.speed = 0.15 end
