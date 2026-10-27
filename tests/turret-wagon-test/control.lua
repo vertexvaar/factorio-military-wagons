@@ -42,8 +42,8 @@ end
 
 -- A closed loop: a straight going north at x from y1 to y0, a right U-turn, the same
 -- straight back south and a second U-turn onto the start. Built with the rail planner's
--- own extensions, always the tightest right turn. Returns the number of rails, or nil
--- if the loop does not close.
+-- own extensions, always the tightest right turn. Returns the number of rails and a rail
+-- in the middle of the far straight, or nil if the loop does not close.
 local function rail_loop(surface, x, y0, y1)
   rail_line(surface, true, x, y0 + 1, y1 - 1)
   local first = surface.find_entities_filtered({ name = "straight-rail", position = { x, y0 + 1 } })[1]
@@ -78,13 +78,15 @@ local function rail_loop(surface, x, y0, y1)
     return true
   end
   if not u_turn() then return nil end
-  for _ = 1, (y1 - y0) / 2 do
+  local far
+  for k = 1, (y1 - y0) / 2 do
     if not extend(head.location.direction) then return nil end
+    if k == (y1 - y0) / 4 then far = head.rail end
   end
   if not u_turn() then return nil end
   -- the last rail of the second U-turn must meet the start rail's south end
   if not head.move_natural() or head.rail ~= stop then return nil end
-  return rails
+  return rails, far
 end
 
 -- Locomotive plus turret wagon, both facing east (or north).
@@ -482,8 +484,9 @@ local function setup()
   end
 
   -- L: loop with curves and diagonals: locomotive, the wagon under test and, when switched on,
-  -- a mine launcher drive one lap forwards and one backwards; the baskets fire at flares meanwhile
-  s.l_rails = rail_loop(surface, 111, -40, 40)
+  -- a mine launcher drive one lap forwards and one backwards by schedule, stopping halfway and
+  -- at the end; flares come all the time, the baskets may fire only while the train stands
+  s.l_rails, s.l_far = rail_loop(surface, 111, -40, 40)
   report(s.l_rails ~= nil, "test loop closes", s.l_rails and s.l_rails .. " rails")
   if s.l_rails then
     -- the two mine launchers are more than their 120 tiles apart: neither answers the other one's flares
@@ -493,6 +496,7 @@ local function setup()
       direction = defines.direction.north,
       position = { 111, -20 },
     })
+    s.l_loco.get_fuel_inventory().insert({ name = "coal", count = 20 })
     s.l_wagons = {}
     local at = -13
     for _, name in pairs({ MOD, "mine-launcher-wagon" }) do
@@ -520,9 +524,38 @@ local function setup()
     end
     -- per direction and wagon: worst deviation, with the tick and wagon orientation it happened at
     s.l_worst = { forward = {}, backward = {} }
-    s.l_phase = "forward"
+    s.l_phase = "start"
     s.l_turned = 0
     s.l_fired = {}
+    s.l_moving_shots = {}
+    s.l_home = surface.find_entities_filtered({ name = "straight-rail", position = { 111, -31 } })[1]
+  end
+
+  -- P: a mine launcher whose basket fired holds its train until the baskets are home, then it
+  -- leaves by schedule, and fires again once it stands; Q: one with nothing to fire leaves at once
+  if prototypes.entity["mine-launcher-wagon"] then
+    for _, k in pairs({ "p", "q" }) do
+      local y = k == "p" and -121 or -131
+      rail_line(surface, false, y, -81, 41)
+      local loco = surface.create_entity({
+        name = "locomotive",
+        force = "player",
+        direction = defines.direction.east,
+        position = { -33, y },
+      })
+      loco.get_fuel_inventory().insert({ name = "coal", count = 20 })
+      s[k] = surface.create_entity({
+        name = "mine-launcher-wagon",
+        force = "player",
+        direction = defines.direction.east,
+        position = { -40, y },
+        raise_built = true,
+      })
+      loco.train.manual_mode = true
+      s[k .. "_target"] = surface.find_entities_filtered({ name = "straight-rail", position = { -11, y } })[1]
+    end
+    s.p.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 6 })
+    s.p_moving_shots = 0
   end
 
   -- an empty wagon must not do anything bad
@@ -588,19 +621,125 @@ local function spawn_enemies()
   end
 end
 
-local LOOP_SPEED = 0.4
 -- as on the straight track
 local LOOP_LIMIT = 0.05
 local LOOP_FLARE = { 80, -40 }
+-- the last tick the test waits for the loop train (tests/run.py runs a few more)
+local LOOP_TICKS = 3900
+-- how long a train may wait for its baskets to turn home
+local PARK_LIMIT = 120
 
--- Mine packages the loop's mine launcher has: in the wagon plus in its baskets.
-local function loop_mines()
-  local s = storage.scene
-  local n = s.l_mine.get_inventory(defines.inventory.artillery_wagon_ammo).get_item_count("wagon-mine")
-  for _, t in pairs(turrets(s.l_mine)) do
+local function flare(position)
+  storage.scene.surface.create_entity({
+    name = "mine-launcher-flare",
+    position = position,
+    force = "player",
+    movement = { 0, 0 },
+    height = 0,
+    vertical_speed = 0,
+    frame_speed = 0,
+  })
+end
+
+-- Mine packages a mine launcher has: in the wagon plus in its baskets.
+local function packages(wagon)
+  local n = wagon.get_inventory(defines.inventory.artillery_wagon_ammo).get_item_count("wagon-mine")
+  for _, t in pairs(turrets(wagon)) do
     n = n + t.get_inventory(defines.inventory.artillery_turret_ammo).get_item_count("military-wagons-wagon-mine")
   end
   return n
+end
+local function loop_mines() return packages(storage.scene.l_mine) end
+
+-- Sends a train to a rail by schedule, waiting there for ticks.
+local function send(train, rail, ticks)
+  local schedule = train.get_schedule()
+  schedule.add_record({ rail = rail, temporary = true, wait_conditions = { { type = "time", ticks = ticks } } })
+  train.manual_mode = false
+  schedule.go_to_station(1)
+end
+
+-- How far the basket furthest from home is turned away from the wagon's direction (turns).
+local function basket_offset(wagon)
+  local worst = 0
+  for _, t in pairs(turrets(wagon)) do
+    local d = (t.relative_turret_orientation - wagon.orientation) % 1
+    worst = math.max(worst, math.min(d, 1 - d))
+  end
+  return worst
+end
+
+-- P and Q: the departure lock of the mine launcher.
+local function check_lock(age)
+  local s = storage.scene
+  if not s.p then return end
+  if age == 2 then flare({ -50, -155 }) end
+  local n = packages(s.p)
+  if s.p_count and n < s.p_count then
+    if s.p.speed ~= 0 then s.p_moving_shots = s.p_moving_shots + 1 end
+    s.p_last_shot = age
+  end
+  s.p_count = n
+  if age == 150 then
+    report(
+      s.p_last_shot ~= nil and s.p.relative_turret_orientation ~= 0,
+      "a basket that fired locks its standing train",
+      string.format(
+        "last shot at tick %s, wagon cannon at %.3f, baskets up to %.3f from home",
+        tostring(s.p_last_shot),
+        s.p.relative_turret_orientation,
+        basket_offset(s.p)
+      )
+    )
+    s.q_offset, s.q_lock = basket_offset(s.q), s.q.relative_turret_orientation
+    send(s.p.train, s.p_target, 6000)
+    send(s.q.train, s.q_target, 6000)
+  end
+  if age > 150 and not s.p_left and s.p.speed ~= 0 then
+    s.p_left = age
+    report(
+      age - 150 > 1 and age - 150 <= PARK_LIMIT,
+      "train waits for its baskets to turn home, then leaves",
+      (age - 150) .. " ticks"
+    )
+    report(
+      basket_offset(s.p) <= 0.002,
+      "baskets are home when the train leaves",
+      string.format("%.4f", basket_offset(s.p))
+    )
+  end
+  if age > 150 and not s.q_left and s.q.speed ~= 0 then
+    s.q_left = age
+    report(
+      age - 150 <= 10,
+      "train without turned baskets leaves at once",
+      string.format(
+        "%d ticks; when sent off its baskets were up to %.3f from home, wagon cannon at %.3f",
+        age - 150,
+        s.q_offset,
+        s.q_lock
+      )
+    )
+  end
+  if s.p_left and not s.p_arrived and s.p.train.state == defines.train_state.wait_station then
+    s.p_arrived = age
+    s.p_shots_before = s.p_last_shot
+    flare({ s.p.position.x - 10, -155 })
+  end
+  if s.p_arrived and not s.p_again and s.p_last_shot ~= s.p_shots_before then s.p_again = age end
+end
+
+local function report_lock()
+  local s = storage.scene
+  if not s.p then return end
+  if not s.p_left then report(false, "train waits for its baskets to turn home, then leaves", "never left") end
+  if not s.q_left then report(false, "train without turned baskets leaves at once", "never left") end
+  report(s.p_moving_shots == 0, "baskets do not fire while their train moves", s.p_moving_shots .. " shots")
+  report(
+    s.p_again ~= nil,
+    "baskets fire again once the train stands",
+    s.p_again and (s.p_again - s.p_arrived) .. " ticks after arriving" or "no shot"
+  )
 end
 
 -- One tick of the loop drive: forwards until the wagon has turned once around, a short
@@ -616,7 +755,12 @@ local function drive_loop(age)
   -- turrets are placed for the wagon position after this tick's train update,
   -- so compare last tick's turret positions with the wagons now
   -- the first ticks after a start are left out, like on the straight track
-  if s.l_last and (s.l_phase == "forward" or s.l_phase == "backward") and age > (s.l_wait or 0) + 5 then
+  if lead.speed == 0 then
+    s.l_started = nil
+  elseif not s.l_started then
+    s.l_started = age
+  end
+  if s.l_last and (s.l_phase == "forward" or s.l_phase == "backward") and s.l_started and age > s.l_started + 5 then
     for i, wagon in pairs(s.l_wagons) do
       local d = deviation(wagon, s.l_last[i])
       local worst = s.l_worst[s.l_phase][wagon.name] or { d = 0, off = 0, ticks = 0 }
@@ -640,41 +784,44 @@ local function drive_loop(age)
   end
   s.l_orientation = lead.orientation
   local train = s.l_loco.train
-  if s.l_phase == "forward" then
-    if math.abs(s.l_turned) >= 1 then
-      s.l_phase, s.l_wait = "stop", age + 30
-      train.speed = 0
-    elseif train.speed < LOOP_SPEED - 0.02 then
-      train.speed = LOOP_SPEED
+  local idle = train.speed == 0 and train.get_schedule().get_record_count() == 0
+  if s.l_phase == "start" then
+    -- forwards: halfway round to the far straight, then on round to the start
+    for _, rail in pairs({ s.l_far, s.l_home }) do
+      send(train, rail, 120)
     end
-  elseif s.l_phase == "stop" then
-    train.speed = 0
-    if age >= s.l_wait then s.l_phase = "backward" end
-  elseif s.l_phase == "backward" then
-    if math.abs(s.l_turned) < 0.001 or (s.l_turned > 0) ~= (s.l_turned_forward > 0) then
+    s.l_phase = "forward"
+  elseif s.l_phase == "forward" and idle and age > 10 then
+    -- backwards: a locomotive at the other end takes over, the first one leaves
+    local last = s.l_wagons[#s.l_wagons]
+    local back = s.surface.create_entity({
+      name = "locomotive",
+      force = "player",
+      direction = defines.direction.south,
+      position = { last.position.x, last.position.y + 7 },
+    })
+    if not back then
+      log("WAGONDEBUG no room for the second locomotive behind " .. serpent.line(last.position))
       s.l_phase = "done"
-      train.speed = 0
-    elseif train.speed > -LOOP_SPEED + 0.02 then
-      train.speed = -LOOP_SPEED
+      return
     end
+    back.get_fuel_inventory().insert({ name = "coal", count = 20 })
+    s.l_loco.destroy()
+    s.l_loco = back
+    for _, rail in pairs({ s.l_far, s.l_home }) do
+      send(back.train, rail, 120)
+    end
+    s.l_phase = "backward"
+  elseif s.l_phase == "backward" and idle then
+    s.l_phase = "done"
   end
-  if s.l_phase == "stop" and not s.l_turned_forward then s.l_turned_forward = s.l_turned end
   if s.l_mine then
     -- a flare every 30 ticks keeps the baskets busy; record every package that leaves
-    if age % 30 == 0 then
-      s.surface.create_entity({
-        name = "mine-launcher-flare",
-        position = LOOP_FLARE,
-        force = "player",
-        movement = { 0, 0 },
-        height = 0,
-        vertical_speed = 0,
-        frame_speed = 0,
-      })
-    end
+    if age % 30 == 0 then flare(LOOP_FLARE) end
     local n = loop_mines()
     for _ = n + 1, s.l_count or n do
       s.l_fired[#s.l_fired + 1] = age
+      if s.l_mine.speed ~= 0 then s.l_moving_shots[#s.l_moving_shots + 1] = age end
     end
     s.l_count = n
     -- baskets the mod replaced (another sink step), to tell them apart from shots
@@ -732,7 +879,12 @@ local function report_loop()
       spots[k] = (spots[k] or 0) + 1
     end
     log("WAGONDEBUG mines by 20-tile square " .. serpent.line(spots))
-    report(#s.l_fired > 0, "loop mine launcher fires while driving", #s.l_fired .. " packages")
+    report(#s.l_fired > 0, "loop mine launcher fires at its stops", #s.l_fired .. " packages")
+    report(
+      #s.l_moving_shots == 0,
+      "loop mine launcher does not fire while the train moves",
+      #s.l_moving_shots .. " packages" .. (#s.l_moving_shots > 0 and " at " .. serpent.line(s.l_moving_shots) or "")
+    )
     report(
       most <= 6,
       "baskets do not fire twice within their cooldown around the loop",
@@ -767,7 +919,10 @@ script.on_event(defines.events.on_tick, function()
   local s = storage.scene
   local age = game.tick - storage.start
   if age == 2 then spawn_track_enemies() end
-  if age >= 2 then drive_loop(age) end
+  if age >= 2 then
+    drive_loop(age)
+    check_lock(age)
+  end
   if age > 2 and age < 1200 and s.b.valid then
     -- turrets are placed for the wagon position after this tick's train update,
     -- so compare last tick's turret positions with the wagon now
@@ -864,7 +1019,6 @@ script.on_event(defines.events.on_tick, function()
       report(alive(s.j_enemies) < #s.j_enemies, "explosive shells kill enemies", alive(s.j_enemies) .. " left")
       report(damaged == 0, "explosive shells spare own buildings", damaged .. " of " .. #s.j_own .. " damaged")
     end
-    report_loop()
     if s.mine then
       local at_flare = s.surface.count_entities_filtered({ name = "land-mine", area = { { -130, 5 }, { -90, 19 } } })
       local at_artillery =
@@ -872,6 +1026,13 @@ script.on_event(defines.events.on_tick, function()
       report(at_flare == 40, "reloaded baskets fire the last two packages", at_flare .. " mines")
       report(at_artillery == 0, "mine launcher ignores artillery flares", at_artillery .. " mines")
     end
+    s.main_done = true
+  end
+  -- the loop and the departure lock take longer; give up on them after LOOP_TICKS
+  if s.main_done and not s.finished and (s.l_phase == "done" or not s.l_rails or age >= LOOP_TICKS) then
+    s.finished = true
+    report_loop()
+    report_lock()
     log("WAGONTEST DONE")
   end
 end)

@@ -72,7 +72,7 @@ def test(exe, space_age, wagon, off):
     if created.returncode != 0 or not os.path.exists(save):
         print(created.stdout[-4000:], created.stderr[-2000:])
         sys.exit("map creation failed")
-    bench = run(exe, "--benchmark", save, "--benchmark-ticks", "1500", "--benchmark-runs", "1")
+    bench = run(exe, "--benchmark", save, "--benchmark-ticks", "4000", "--benchmark-runs", "1")
     log_path = os.path.join(ENV, "write", "factorio-current.log")
     log = open(log_path, encoding="utf-8", errors="replace").read() if os.path.exists(log_path) else bench.stdout
     lines = [l for l in log.splitlines() if "WAGONTEST" in l or "Error" in l]
