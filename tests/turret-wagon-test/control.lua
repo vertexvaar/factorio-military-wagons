@@ -486,13 +486,10 @@ local function setup()
   s.l_rails = rail_loop(surface, 111, -40, 40)
   report(s.l_rails ~= nil, "test loop closes", s.l_rails and s.l_rails .. " rails")
   if s.l_rails then
-    -- a force of its own, so neither mine launcher answers the other one's flares
-    s.l_force = game.forces["wagon-loop"] or game.create_force("wagon-loop")
-    s.l_force.set_friend("player", true)
-    game.forces.player.set_friend(s.l_force, true)
+    -- the two mine launchers are more than their 120 tiles apart: neither answers the other one's flares
     s.l_loco = surface.create_entity({
       name = "locomotive",
-      force = s.l_force,
+      force = "player",
       direction = defines.direction.north,
       position = { 111, -20 },
     })
@@ -502,7 +499,7 @@ local function setup()
       if prototypes.entity[name] then
         local wagon = surface.create_entity({
           name = name,
-          force = s.l_force,
+          force = "player",
           direction = defines.direction.north,
           raise_built = true,
           position = { 111, at },
@@ -668,7 +665,7 @@ local function drive_loop(age)
       s.surface.create_entity({
         name = "mine-launcher-flare",
         position = LOOP_FLARE,
-        force = s.l_force,
+        force = "player",
         movement = { 0, 0 },
         height = 0,
         vertical_speed = 0,
