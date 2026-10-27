@@ -99,6 +99,9 @@ end
 -- The original of a shell copy, or the item itself.
 local function original_item(name)
   if name:sub(1, #config.shell_prefix) ~= config.shell_prefix then return name end
+  local original = name:sub(#config.shell_prefix + 1)
+  return prototypes.item[original] and original or name
+end
 
 local update_icons -- defined below with the ammo supply
 
@@ -423,10 +426,6 @@ end
 local function on_built(event)
   local wagon = event.entity or event.destination
   if wagon and wagon.valid and KINDS[wagon.name] then create_rig(wagon) end
-end
-
-  local original = name:sub(#config.shell_prefix + 1)
-  return prototypes.item[original] and original or name
 end
 
 -- Mined wagons give back the ammo that sat in their turrets.
