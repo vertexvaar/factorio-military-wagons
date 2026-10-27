@@ -75,7 +75,19 @@ script.on_event(defines.events.on_tick, function()
       c = train(surface, 41, "mine-launcher-wagon"),
       -- D: like A, but with mine packages in the wagon
       d = train(surface, 61, "mine-launcher-wagon"),
+      -- E: vanilla artillery wagon after a shot, driven off by a player character at the controls
+      e = train(surface, 81, "artillery-wagon"),
     }
+    -- F: control, a cargo wagon with a driver; G: mine launcher turned to 0.25 by script, with a driver
+    storage.s.f = train(surface, 101, "cargo-wagon")
+    storage.s.g = train(surface, 121, "mine-launcher-wagon")
+    local s = storage.s
+    for _, k in pairs({ "f", "g" }) do
+      s[k].driver = surface.create_entity({ name = "character", force = "player", position = { 7, s[k].y + 3 } })
+      s[k].loco.set_driver(s[k].driver)
+    end
+    s.e.driver = surface.create_entity({ name = "character", force = "player", position = { 7, 84 } })
+    s.e.loco.set_driver(s.e.driver)
     storage.start = game.tick
     local p = prototypes.entity["mine-launcher-wagon"]
     local v = prototypes.entity["artillery-wagon"]
@@ -96,6 +108,16 @@ script.on_event(defines.events.on_tick, function()
     s.d.wagon.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 5 })
     s.d.wagon.relative_turret_orientation = 0.25
     s.b.wagon.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "artillery-shell", count = 5 })
+    s.e.wagon.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "artillery-shell", count = 5 })
+    s.e.wagon.surface.create_entity({
+      name = "artillery-flare",
+      position = { 0, 81 + 80 },
+      force = "player",
+      movement = { 0, 0 },
+      height = 0,
+      vertical_speed = 0,
+      frame_speed = 0,
+    })
     s.b.wagon.surface.create_entity({
       name = "artillery-flare",
       position = { 0, 21 - 80 },
@@ -125,6 +147,24 @@ script.on_event(defines.events.on_tick, function()
     end
     if age <= 330 or age % 5 == 0 then
       log(string.format("PARKPROBE moving tick %d | A %s | B %s | C %s", age, state(s.a), state(s.b), state(s.c)))
+    end
+  end
+  if age == 1 then s.g.wagon.relative_turret_orientation = 0.25 end
+  for _, k in pairs({ "e", "f", "g" }) do
+    if age >= 300 then
+      s[k].loco.riding_state =
+        { acceleration = defines.riding.acceleration.accelerating, direction = defines.riding.direction.straight }
+    end
+    if age >= 290 and age % 10 == 0 then
+      log(
+        string.format(
+          "PARKPROBE %s tick %d driver %s %s",
+          k:upper(),
+          age,
+          tostring(s[k].loco.get_driver() ~= nil),
+          state(s[k])
+        )
+      )
     end
   end
   if age >= 300 and age % 25 == 0 then log(string.format("PARKPROBE D tick %d %s", age, state(s.d))) end
