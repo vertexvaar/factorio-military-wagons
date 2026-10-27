@@ -131,16 +131,9 @@ local function load_of(entity)
   return inv.get_item_count(SPEC.ammo) + (prototypes.item[copy] and inv.get_item_count(copy) or 0)
 end
 
--- Where the wagon's drawn front points, as in the mod. Wagons with symmetric mounts follow
--- the orientation. The mine launcher's sprites have back equal to front, so the game draws it
--- turned round (orientation + 0.5) the same; which half it picks follows its choice among
--- 256 directions.
-local SYMMETRIC = { ["mine-launcher-wagon"] = false }
-local function drawn(wagon)
-  local o = wagon.orientation
-  if SYMMETRIC[wagon.name] ~= false then return o % 1 end
-  return (math.floor(o * 256 + 0.5) % 256 >= 128 and o - 0.5 or o) % 1
-end
+-- Where the wagon's drawn front points: every wagon is drawn as it is turned (the mine
+-- launcher is rendered all the way round, the others have symmetric mounts).
+local function drawn(wagon) return wagon.orientation % 1 end
 
 -- offset: tiles along the wagon axis, or { along, across } with across to the right of the front
 local function mount(wagon, offset)

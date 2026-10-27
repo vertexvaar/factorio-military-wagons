@@ -55,6 +55,8 @@ config.wagons = {
     name = "mine-launcher-wagon",
     turret = "mine-launcher-basket",
     variant = "mine",
+    -- rendered all the way round, see tools/blender/wagon.py FULL_TURN
+    full_turn = true,
     fluid = false,
     -- { along, across }: two rows of three, the across offset to the right of the front
     mounts = { { -2.05, -0.47 }, { -0.95, -0.47 }, { 0.15, -0.47 }, { -2.05, 0.47 }, { -0.95, 0.47 }, { 0.15, 0.47 } },
