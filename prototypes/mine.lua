@@ -45,6 +45,8 @@ return function(config)
   wagon.cannon_base_shift_when_vertical = 0
   wagon.cannon_base_height = 1.9
   wagon.cannon_parking_frame_count = 0
+  -- the remote shows the wagon's range: no manual bonus, so it matches the baskets' 120 tiles
+  wagon.manual_range_modifier = 1
   wagon.rotating_sound = nil
   rig.armour(wagon)
   local pictures = graphics.wagon_pictures(config.variant)
