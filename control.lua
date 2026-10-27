@@ -38,6 +38,11 @@ for _, kind in pairs(config.enabled()) do
     end
   end
 end
+-- SALVOS[wagon name] = Kind, wagons that fire salvos and then reload (the mine launcher)
+local SALVOS = {}
+for _, kind in pairs(config.enabled()) do
+  if kind.salvo then SALVOS[kind.name] = kind end
+end
 -- Without elevated rails every wagon is on the ground.
 local ELEVATED_RAILS = script.active_mods["elevated-rails"] ~= nil
 
@@ -326,9 +331,102 @@ local function original_item(name)
   return prototypes.item[original] and original or name
 end
 
+-- Mine launcher salvos. The wagon has six launcher baskets: up to six shots go out
+-- right after another, then the baskets reload. Artillery has no magazine, so during
+-- the reload the wagon's ammo is held back here and handed back afterwards.
+
+---@class Salvo
+---@field wagon LuaEntity
+---@field shots integer shots since the baskets were last full
+---@field last integer tick of the last shot
+---@field reloaded_at integer? tick the reload ends, nil = not reloading
+---@field held ItemWithQualityCounts[] ammo taken out during the reload
+
+-- storage.salvos[wagon unit number] = Salvo
+
+local AMMO = defines.inventory.artillery_wagon_ammo
+
+local function hold(salvo)
+  local inventory = salvo.wagon.get_inventory(AMMO)
+  if inventory.is_empty() then return end
+  for _, item in pairs(inventory.get_contents()) do
+    salvo.held[#salvo.held + 1] = item
+  end
+  inventory.clear()
+end
+
+-- Gives held ammo back to the wagon, or to a buffer (mined wagon); what does not fit lands next to it.
+local function give_back(salvo, target)
+  local wagon = salvo.wagon
+  for _, item in pairs(salvo.held) do
+    local stack = { name = item.name, quality = item.quality, count = item.count }
+    local inserted = target.insert(stack)
+    if inserted < item.count and wagon.valid then
+      stack.count = item.count - inserted
+      wagon.surface.spill_item_stack({ position = wagon.position, stack = stack, force = wagon.force })
+    end
+  end
+  salvo.held = {}
+end
+
+local on_reload_tick
+local function update_reload_handler()
+  local reloading = false
+  for _, salvo in pairs(storage.salvos) do
+    if salvo.reloaded_at then reloading = true end
+  end
+  script.on_nth_tick(1, reloading and on_reload_tick or nil)
+end
+
+-- Every tick while a wagon reloads: ammo put in meanwhile (inserters, players) waits too.
+on_reload_tick = function(event)
+  for id, salvo in pairs(storage.salvos) do
+    if not salvo.wagon.valid then
+      storage.salvos[id] = nil
+    elseif salvo.reloaded_at then
+      if event.tick >= salvo.reloaded_at then
+        salvo.reloaded_at = nil
+        salvo.shots = 0
+        give_back(salvo, salvo.wagon.get_inventory(AMMO))
+      else
+        hold(salvo)
+      end
+    end
+  end
+  update_reload_handler()
+end
+
+local function on_script_trigger(event)
+  if event.effect_id ~= "military-wagons-mine-shot" then return end
+  local wagon = event.source_entity or event.cause_entity
+  local kind = wagon and wagon.valid and SALVOS[wagon.name]
+  if not kind then return end
+  local id = wagon.unit_number
+  local salvo = storage.salvos[id]
+  if not salvo then
+    salvo = { wagon = wagon, shots = 0, last = event.tick, held = {} }
+    storage.salvos[id] = salvo
+  end
+  -- baskets left alone for a reload time are full again
+  if event.tick - salvo.last >= kind.reload then salvo.shots = 0 end
+  salvo.shots = salvo.shots + 1
+  salvo.last = event.tick
+  if salvo.shots >= kind.salvo and not salvo.reloaded_at then
+    salvo.reloaded_at = event.tick + kind.reload
+    hold(salvo)
+    update_reload_handler()
+  end
+end
+
 -- Mined wagons give back the ammo that sat in their turrets.
 local function on_mined(event)
   local wagon = event.entity
+  local salvo = storage.salvos[wagon.unit_number]
+  if salvo then
+    if event.buffer then give_back(salvo, event.buffer) end
+    storage.salvos[wagon.unit_number] = nil
+    update_reload_handler()
+  end
   local rig = storage.rigs[wagon.unit_number]
   if not rig then return end
   if event.buffer and not KINDS[rig.kind].fluid then
@@ -350,7 +448,10 @@ local function on_mined(event)
 end
 
 local function on_destroyed(event)
-  if event.type == defines.target_type.entity then storage.health[event.useful_id] = nil end
+  if event.type == defines.target_type.entity then
+    storage.health[event.useful_id] = nil
+    storage.salvos[event.useful_id] = nil
+  end
   if event.type == defines.target_type.entity and storage.rigs[event.useful_id] then
     destroy_rig(event.useful_id)
     update_tick_handler()
@@ -681,6 +782,7 @@ local function rebuild()
   storage.rigs = storage.rigs or {}
   storage.panels = storage.panels or {}
   storage.health = storage.health or {}
+  storage.salvos = storage.salvos or {}
   for id, rig in pairs(storage.rigs) do
     local kind = KINDS[rig.kind]
     local complete = rig.wagon.valid and kind and #rig.turrets == #kind.mounts
@@ -714,10 +816,14 @@ local function rebuild()
 end
 
 -- With every wagon switched off there is nothing to listen for (an empty filter would match everything).
-if next(WAGON_NAMES) then
+if next(WAGON_NAMES) or next(SALVOS) then
   local filter = {}
   for _, name in pairs(WAGON_NAMES) do
     filter[#filter + 1] = { filter = "name", name = name }
+  end
+  local mined_filter = table.deepcopy(filter)
+  for name in pairs(SALVOS) do
+    mined_filter[#mined_filter + 1] = { filter = "name", name = name }
   end
   for _, e in pairs({
     defines.events.on_built_entity,
@@ -735,7 +841,7 @@ if next(WAGON_NAMES) then
     defines.events.on_space_platform_mined_entity,
     defines.events.script_raised_destroy,
   }) do
-    script.on_event(e, on_mined, filter)
+    script.on_event(e, on_mined, mined_filter)
   end
   script.on_event(defines.events.on_gui_elem_changed, on_elem_changed)
   script.on_event(defines.events.on_gui_checked_state_changed, on_checked)
@@ -753,6 +859,7 @@ if next(ARMORED_NAMES) then
   script.on_event(defines.events.on_player_placed_equipment, on_equipment_changed)
   script.on_event(defines.events.on_player_removed_equipment, on_equipment_changed)
 end
+if next(SALVOS) then script.on_event(defines.events.on_script_trigger_effect, on_script_trigger) end
 script.on_event(defines.events.on_object_destroyed, on_destroyed)
 script.on_nth_tick(REFILL_INTERVAL, on_refill)
 
@@ -763,6 +870,9 @@ script.on_configuration_changed(function()
 end)
 script.on_load(function()
   if next(storage.rigs) then script.on_event(defines.events.on_tick, on_tick) end
+  for _, salvo in pairs(storage.salvos or {}) do
+    if salvo.reloaded_at then script.on_nth_tick(1, on_reload_tick) end
+  end
 end)
 
 remote.add_interface("military-wagons", {

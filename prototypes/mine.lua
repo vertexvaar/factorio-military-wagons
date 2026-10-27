@@ -11,6 +11,8 @@ local MIN_RANGE = 16
 -- one thrown mine is a package of this many land mines, scattered around the target
 local MINES_PER_SHOT = 5
 local SCATTER = 2.5
+-- control.lua counts the shots of a salvo with this script trigger
+local SHOT_EFFECT = "military-wagons-mine-shot"
 
 -- config: this wagon's entry in config.wagons
 return function(config)
@@ -59,7 +61,8 @@ return function(config)
   gun.attack_parameters.ammo_categories = nil
   gun.attack_parameters.range = RANGE
   gun.attack_parameters.min_range = MIN_RANGE
-  gun.attack_parameters.cooldown = 60
+  -- the baskets fire right after another; the reload after a salvo is in control.lua
+  gun.attack_parameters.cooldown = 10
   gun.attack_parameters.projectile_creation_distance = 0
   gun.attack_parameters.projectile_center = { 0, 0 }
   gun.attack_parameters.projectile_creation_parameters = nil
@@ -97,6 +100,10 @@ return function(config)
   local shell = data.raw["ammo"]["artillery-shell"]
   local ammo_type = table.deepcopy(shell.ammo_type)
   ammo_type.action.action_delivery.projectile = "wagon-mine-projectile"
+  local source_effects = ammo_type.action.action_delivery.source_effects or {}
+  if source_effects.type then source_effects = { source_effects } end
+  source_effects[#source_effects + 1] = { type = "script", effect_id = SHOT_EFFECT }
+  ammo_type.action.action_delivery.source_effects = source_effects
 
   local flare = table.deepcopy(data.raw["artillery-flare"]["artillery-flare"])
   flare.name = "mine-launcher-flare"

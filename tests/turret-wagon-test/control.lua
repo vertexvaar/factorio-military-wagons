@@ -380,7 +380,8 @@ local function setup()
     )
   end
 
-  -- I: mine launcher, whenever it is switched on: throws a mine only at its own flare
+  -- I: mine launcher, whenever it is switched on: throws mines only at its own flares,
+  -- a salvo of six, then it reloads before the last two
   if prototypes.entity["mine-launcher-wagon"] then
     rail_line(surface, true, -141, -41, 41)
     s.mine = surface.create_entity({
@@ -390,17 +391,19 @@ local function setup()
       position = { -141, 0 },
       raise_built = true,
     })
-    s.mine.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 5 })
+    s.mine.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 8 })
     report(s.mine.grid ~= nil, "mine launcher has an equipment grid")
-    surface.create_entity({
-      name = "mine-launcher-flare",
-      position = { -111, 10 },
-      force = "player",
-      movement = { 0, 0 },
-      height = 0,
-      vertical_speed = 0,
-      frame_speed = 0,
-    })
+    for k = 0, 7 do
+      surface.create_entity({
+        name = "mine-launcher-flare",
+        position = { -125 + 4 * k, 12 },
+        force = "player",
+        movement = { 0, 0 },
+        height = 0,
+        vertical_speed = 0,
+        frame_speed = 0,
+      })
+    end
     -- a plain artillery flare, which the launcher must leave alone
     surface.create_entity({
       name = "artillery-flare",
@@ -536,6 +539,12 @@ script.on_event(defines.events.on_tick, function()
     end
   end
   if age == 80 then spawn_enemies() end
+  if age == 400 and s.mine then
+    local mines = s.surface.count_entities_filtered({ name = "land-mine", area = { { -130, 5 }, { -90, 19 } } })
+    report(mines == 30, "mine launcher fires a salvo of six packages", mines .. " mines")
+    local loaded = s.mine.get_inventory(defines.inventory.artillery_wagon_ammo).get_item_count()
+    report(loaded == 0, "mine launcher holds its ammo back while reloading", loaded .. " packages loaded")
+  end
   if age == 1200 then
     report(s.b.valid, "moving train survives its own fire")
     if not s.b.valid then
@@ -594,10 +603,10 @@ script.on_event(defines.events.on_tick, function()
       report(damaged == 0, "explosive shells spare own buildings", damaged .. " of " .. #s.j_own .. " damaged")
     end
     if s.mine then
-      local at_flare = s.surface.count_entities_filtered({ name = "land-mine", position = { -111, 10 }, radius = 6 })
+      local at_flare = s.surface.count_entities_filtered({ name = "land-mine", area = { { -130, 5 }, { -90, 19 } } })
       local at_artillery =
         s.surface.count_entities_filtered({ name = "land-mine", position = { -111, -10 }, radius = 4 })
-      report(at_flare == 5, "mine launcher scatters five mines at its flare", at_flare .. " mines")
+      report(at_flare == 40, "mine launcher scatters five mines per flare, reloads, fires the rest", at_flare .. " mines")
       report(at_artillery == 0, "mine launcher ignores artillery flares", at_artillery .. " mines")
     end
     log("WAGONTEST DONE")

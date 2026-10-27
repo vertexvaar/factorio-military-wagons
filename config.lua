@@ -53,6 +53,9 @@ config.wagons = {
     name = "mine-launcher-wagon",
     variant = "mine",
     mounts = {},
+    -- six launcher baskets: up to six shots right after another, then they reload (ticks)
+    salvo = 6,
+    reload = 600,
   },
 }
 
