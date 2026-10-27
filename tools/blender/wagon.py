@@ -2,7 +2,8 @@
 twin cannon (twin), howitzer (howitzer) and mine launcher (mine).
 
 Run:  blender -b --factory-startup -P tools/blender/wagon.py -- <variant> <out_dir> [frames...]
-Frames are 0..127, frame i shows orientation i/256 (back equals front).
+Frames are 0..127, frame i shows orientation i/256 (back equals front); wagons whose ends
+differ (FULL_TURN) get frames 0..255, all the way round.
 The wheels are not modelled: Factorio draws its standard train wheels on top.
 The turret heads are not modelled either: the game draws the vanilla turret heads
 on top of the barbettes (round armoured mounts) modelled here.
@@ -22,6 +23,10 @@ SKIRT_LOW = 0.6  # armour skirt bottom edge, above the wheels
 BOGIE_Y = 2.0
 END_Y = 3.2  # headstock
 DECK = 1.45  # deck of the armoured hull (mg, rocket)
+
+# Wagons whose front and back differ (the mine launcher's cab): rendered all the way round,
+# not with back equal to front. Keep in sync with full_turn in config.lua.
+FULL_TURN = {"mine"}
 
 # Turret mounts (along Y), barbette radius, barbette top height. Keep the mounts in sync with config.lua.
 VARIANTS = {
@@ -421,6 +426,6 @@ def build(variant):
 if __name__ == "__main__":
     a = rig.args()
     variant, out = a[0], a[1]
-    frames = [int(x) for x in a[2:]] or list(range(128))
+    frames = [int(x) for x in a[2:]] or list(range(256 if variant in FULL_TURN else 128))
     build(variant)
     rig.render_frames(out, frames, lambda i: i / 256, passes=("color", "mask", "shadow"), samples=24)

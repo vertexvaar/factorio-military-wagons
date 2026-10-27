@@ -14,9 +14,6 @@ local ICON_LIFT = 1.0
 -- the mine launcher's own cannon turned this far holds its train (see stand)
 local LOCKED = 0.5
 
--- Where the wagon's drawn front points. The wagon sprites have back equal to front, so a
--- wagon turned round (orientation + 0.5) is drawn the same; the mounts follow the drawing.
-local function front(wagon) return wagon.orientation % 0.5 end
 local FORESHORTEN = rigging.FORESHORTEN
 
 ---@class Kind one entry of config.wagons, plus:
@@ -46,6 +43,12 @@ for _, kind in pairs(config.enabled()) do
     end
   end
 end
+-- Where the wagon's drawn front points. Most wagon sprites have back equal to front, so a
+-- wagon turned round (orientation + 0.5) is drawn the same; the mounts follow the drawing.
+-- Wagons rendered all the way round (kind.full_turn) are drawn as they are turned.
+local function drawn(kind, orientation) return kind.full_turn and orientation % 1 or orientation % 0.5 end
+local function front(wagon) return drawn(KINDS[wagon.name], wagon.orientation) end
+
 -- Without elevated rails every wagon is on the ground.
 local ELEVATED_RAILS = script.active_mods["elevated-rails"] ~= nil
 
@@ -190,7 +193,7 @@ local function place(rig, predict)
     o = o + d
   end
   rig.last_orientation = predict and wagon.orientation or nil
-  o = o % 0.5 -- the drawn front, see front()
+  o = drawn(kind, o) -- the drawn front, see front()
   local a = o * 2 * math.pi
   -- The mounts follow the drawn (foreshortened) roof, not the world.
   local ax, ay = math.sin(a), -math.cos(a) * FORESHORTEN
