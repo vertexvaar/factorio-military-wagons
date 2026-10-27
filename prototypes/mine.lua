@@ -14,6 +14,11 @@ local BASKET_CATEGORY = wagon_config.shell_prefix .. "wagon-mine"
 local BASKET_AMMO = wagon_config.shell_prefix .. "wagon-mine"
 -- control.lua notes each basket's shot with this script trigger
 local SHOT_EFFECT = "military-wagons-basket-shot"
+-- The launcher box's face, where a package leaves (tools/blender/turret.py mine_basket): this
+-- far above the basket's mount on screen (1.85 tiles up, seen from 50 degrees), and this far
+-- out in front of the turning base.
+local MUZZLE_LIFT = 1.19
+local MUZZLE_OUT = 0.2
 local RANGE = 120
 local MIN_RANGE = 16
 -- one thrown mine is a package of this many land mines, scattered around the target
@@ -270,5 +275,21 @@ return function(config)
       unit = tech_units,
     },
   })
-  data:extend(rig.variants(basket, config.mounts))
+  -- The shot and its muzzle flash leave from the turret entity, which sits below its drawn
+  -- basket: on the ground under the mount, and sunk further south (see prototypes/rig.lua).
+  -- Each variant gets a gun of its own that starts them at the drawn basket's face.
+  local variants = rig.variants(basket, config.mounts)
+  for i = 1, #variants do
+    local variant = variants[i]
+    local k = tonumber(variant.name:match("%-sink%-(%d+)$") or 0)
+    local sink = variant.name:match("%-elevated$") and 0 or rig.sink(k)
+    local variant_gun = table.deepcopy(basket_gun)
+    variant_gun.name = variant.name
+    variant_gun.attack_parameters.projectile_center = { 0, -(sink + MUZZLE_LIFT) }
+    variant_gun.attack_parameters.projectile_creation_distance = MUZZLE_OUT
+    variant.gun = variant_gun.name
+    -- the step 0 gun has the basket gun's name and takes its place
+    variants[#variants + 1] = variant_gun
+  end
+  data:extend(variants)
 end
