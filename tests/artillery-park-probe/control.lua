@@ -63,7 +63,7 @@ script.on_event(defines.events.on_tick, function()
     local surface = game.surfaces.nauvis
     surface.request_to_generate_chunks({ 0, 0 }, 10)
     surface.force_generate_chunk_requests()
-    for _, e in pairs(surface.find_entities_filtered({ area = { { -150, -150 }, { 350, 150 } } })) do
+    for _, e in pairs(surface.find_entities_filtered({ area = { { -150, -150 }, { 350, 280 } } })) do
       if e.type ~= "character" then e.destroy() end
     end
     for _, e in pairs(surface.find_entities_filtered({ force = "enemy" })) do
@@ -82,6 +82,20 @@ script.on_event(defines.events.on_tick, function()
     storage.s.f = train(surface, 101, "cargo-wagon")
     storage.s.g = train(surface, 121, "mine-launcher-wagon")
     local s = storage.s
+    -- H..K: the variants from data.lua, turned to 0.25 by script and sent off by schedule
+    s.variants = {}
+    for i, name in pairs({ "probe-park-frames", "probe-park-auto", "probe-park-both", "probe-park-fast" }) do
+      s.variants[name] = train(surface, 121 + 20 * i, name)
+      s.variants[name].wagon
+        .get_inventory(defines.inventory.artillery_wagon_ammo)
+        .insert({ name = "wagon-mine", count = 5 })
+    end
+    -- vanilla artillery wagons turned by script instead of by a target, without and with shells
+    s.variants["vanilla-script"] = train(surface, 221, "artillery-wagon")
+    s.variants["vanilla-script-shells"] = train(surface, 241, "artillery-wagon")
+    s.variants["vanilla-script-shells"].wagon
+      .get_inventory(defines.inventory.artillery_wagon_ammo)
+      .insert({ name = "artillery-shell", count = 5 })
     for _, k in pairs({ "f", "g" }) do
       s[k].driver = surface.create_entity({ name = "character", force = "player", position = { 7, s[k].y + 3 } })
       s[k].loco.set_driver(s[k].driver)
@@ -111,7 +125,7 @@ script.on_event(defines.events.on_tick, function()
     s.e.wagon.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "artillery-shell", count = 5 })
     s.e.wagon.surface.create_entity({
       name = "artillery-flare",
-      position = { 0, 81 + 80 },
+      position = { -140, 81 },
       force = "player",
       movement = { 0, 0 },
       height = 0,
@@ -149,11 +163,41 @@ script.on_event(defines.events.on_tick, function()
       log(string.format("PARKPROBE moving tick %d | A %s | B %s | C %s", age, state(s.a), state(s.b), state(s.c)))
     end
   end
-  if age == 1 then s.g.wagon.relative_turret_orientation = 0.25 end
+  if age == 1 then
+    s.g.wagon.relative_turret_orientation = 0.25
+    for _, v in pairs(s.variants) do
+      v.wagon.relative_turret_orientation = 0.25
+    end
+  end
+  if age == 300 then
+    for name, v in pairs(s.variants) do
+      local inv = v.wagon.get_inventory(defines.inventory.artillery_wagon_ammo)
+      log(
+        "PARKPROBE ammo "
+          .. name
+          .. " "
+          .. serpent.line(inv.get_contents())
+          .. " gun "
+          .. serpent.line(v.wagon.prototype.guns)
+      )
+      go(v)
+    end
+  end
+  for name, v in pairs(s.variants) do
+    if not v.wagon.valid then
+      if not v.gone then log("PARKPROBE " .. name .. " wagon gone at tick " .. age) end
+      v.gone = true
+    elseif (age >= 290 and age % 20 == 0) or (age >= 300 and v.wagon.speed ~= 0 and not v.moved) then
+      if age >= 300 and v.wagon.speed ~= 0 then v.moved = true end
+      log(string.format("PARKPROBE %s tick %d %s", name, age, state(v)))
+    end
+  end
   for _, k in pairs({ "e", "f", "g" }) do
     if age >= 300 then
-      s[k].loco.riding_state =
-        { acceleration = defines.riding.acceleration.accelerating, direction = defines.riding.direction.straight }
+      s[k].loco.riding_state = {
+        acceleration = defines.riding.acceleration.accelerating,
+        direction = defines.riding.direction.straight,
+      }
     end
     if age >= 290 and age % 10 == 0 then
       log(
@@ -181,3 +225,17 @@ script.on_event(defines.events.on_tick, function()
     )
   end
 end)
+
+script.on_event(
+  defines.events.on_entity_died,
+  function(event)
+    log(
+      "PARKPROBE died "
+        .. event.entity.name
+        .. " at "
+        .. serpent.line(event.entity.position)
+        .. " by "
+        .. tostring(event.cause and event.cause.name)
+    )
+  end
+)
