@@ -282,8 +282,9 @@ local function refill_ammo(rig, kind)
     local need = kind.refill - ammo.get_item_count()
     -- A turret with a reload gets its next round only when the reload is over. Swapping it for
     -- another variant (in curves) makes a new entity without the cooldown; empty, it waits anyway.
+    -- (It may get the round up to a refill interval late.)
     local fired = kind.reload and rig.fired and rig.fired[i]
-    if fired and tick - fired < kind.reload - REFILL_INTERVAL then need = 0 end
+    if fired and tick - fired < kind.reload then need = 0 end
     if need > 0 then
       local loaded = ammo[1].valid_for_read and ammo[1]
       for _, stack in pairs(cargo.get_contents()) do

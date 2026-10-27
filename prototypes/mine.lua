@@ -91,6 +91,9 @@ return function(config)
   basket.base_picture = nil
   basket.cannon_barrel_pictures = nil
   basket.cannon_base_pictures = graphics.turret_animation(config.variant)
+  -- the vanilla cannon is drawn about a tile above its entity; the rendered basket
+  -- already sits at its height on the wagon
+  basket.cannon_base_shift = { 0, 0, 0 }
   basket.rotating_sound = nil
   basket.factoriopedia_simulation = nil
 
