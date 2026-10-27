@@ -380,8 +380,8 @@ local function setup()
     )
   end
 
-  -- I: mine launcher, whenever it is switched on: throws mines only at its own flares,
-  -- a salvo of six, then it reloads before the last two
+  -- I: mine launcher, whenever it is switched on: its six baskets throw mine packages only
+  -- at its own flares, each basket one every 10 s, so six go out at once and the last two later
   if prototypes.entity["mine-launcher-wagon"] then
     rail_line(surface, true, -141, -41, 41)
     s.mine = surface.create_entity({
@@ -393,6 +393,8 @@ local function setup()
     })
     s.mine.get_inventory(defines.inventory.artillery_wagon_ammo).insert({ name = "wagon-mine", count = 8 })
     report(s.mine.grid ~= nil, "mine launcher has an equipment grid")
+    local baskets = remote.call("military-wagons", "turrets", s.mine)
+    report(baskets and #baskets == 6, "mine launcher has six baskets", baskets and #baskets)
     for k = 0, 7 do
       surface.create_entity({
         name = "mine-launcher-flare",
@@ -541,9 +543,7 @@ script.on_event(defines.events.on_tick, function()
   if age == 80 then spawn_enemies() end
   if age == 400 and s.mine then
     local mines = s.surface.count_entities_filtered({ name = "land-mine", area = { { -130, 5 }, { -90, 19 } } })
-    report(mines == 30, "mine launcher fires a salvo of six packages", mines .. " mines")
-    local loaded = s.mine.get_inventory(defines.inventory.artillery_wagon_ammo).get_item_count()
-    report(loaded == 0, "mine launcher holds its ammo back while reloading", loaded .. " packages loaded")
+    report(mines == 30, "six baskets fire one package each, five mines per package", mines .. " mines")
   end
   if age == 1200 then
     report(s.b.valid, "moving train survives its own fire")
@@ -606,7 +606,7 @@ script.on_event(defines.events.on_tick, function()
       local at_flare = s.surface.count_entities_filtered({ name = "land-mine", area = { { -130, 5 }, { -90, 19 } } })
       local at_artillery =
         s.surface.count_entities_filtered({ name = "land-mine", position = { -111, -10 }, radius = 4 })
-      report(at_flare == 40, "mine launcher scatters five mines per flare, reloads, fires the rest", at_flare .. " mines")
+      report(at_flare == 40, "reloaded baskets fire the last two packages", at_flare .. " mines")
       report(at_artillery == 0, "mine launcher ignores artillery flares", at_artillery .. " mines")
     end
     log("WAGONTEST DONE")
