@@ -9,6 +9,8 @@ Date: 2026-10-26
     - The mine launcher wagon no longer shows a vanilla artillery cannon floating next to it. The launcher baskets on the wagon fire the mines.
     - Roof turrets follow the wagon more closely in curves: the script now also predicts the wagon turning.
     - Roof turrets sit right on wagons turned round (driving south or east): they follow the drawn wagon, whose back looks like its front.
+    - The mine launcher wagon is drawn all the way round, so it no longer looks turned when driving south or east.
+    - A launcher basket's shot and muzzle flash leave from the basket that fires, no longer from one spot at the wagon.
     - In alt mode the ammo icons of the roof turrets are shown on the turrets, no longer below them.
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.0
