@@ -95,6 +95,8 @@ local function create_turret(rig, elevated, sink, position)
     create_build_effect_smoke = false,
   })
   turret.destructible = false
+  -- baskets start at home, facing the wagon's front (see supervise)
+  if turret.type == "artillery-turret" then turret.relative_turret_orientation = wagon.orientation end
   if rig.targets or rig.ignore then apply_targets(rig, turret) end
   return turret
 end
