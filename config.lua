@@ -64,6 +64,8 @@ config.wagons = {
     loads = { ["wagon-mine"] = "military-wagons-wagon-mine" },
     -- no target priorities: the baskets fire only where the remote points
     targets = false,
+    -- each basket throws one package per reload (ticks)
+    reload = 600,
   },
 }
 

@@ -9,6 +9,8 @@ local config = require("config")
 local rigging = require("prototypes.rig")
 
 local REFILL_INTERVAL = 30
+-- alt mode ammo icons sit this far above a turret's mount, where its head is drawn
+local ICON_LIFT = 1.0
 local FORESHORTEN = rigging.FORESHORTEN
 
 ---@class Kind one entry of config.wagons, plus:
@@ -51,6 +53,9 @@ local ELEVATED_RAILS = script.active_mods["elevated-rails"] ~= nil
 ---@field targets table<integer, string>? priority list slot -> entity name
 ---@field ignore boolean? the turrets shoot only at targets on the priority list
 ---@field min_range number? chosen minimum range, nil = the turret's own
+---@field last_orientation number? wagon orientation on the previous tick while moving
+---@field fired table<integer, integer>? tick of each turret's last shot (turrets with a reload)
+---@field icons table<integer, {object: LuaRenderObject, sprite: string}>? alt mode icon of each turret
 
 -- storage.rigs[wagon unit number] = Rig
 
@@ -91,6 +96,12 @@ local function create_turret(rig, elevated, sink, position)
   return turret
 end
 
+-- The original of a shell copy, or the item itself.
+local function original_item(name)
+  if name:sub(1, #config.shell_prefix) ~= config.shell_prefix then return name end
+
+local update_icons -- defined below with the ammo supply
+
 -- A roof turret's ammo: artillery turrets (the mine launcher's baskets) have their own inventory.
 local function turret_ammo(turret)
   return turret.get_inventory(
@@ -128,6 +139,7 @@ local function swap(rig, i, elevated, sink)
   old.destroy()
   rig.turrets[i] = new
   rig.sinks[i] = sink
+  if rig.icons then update_icons(rig, KINDS[rig.kind]) end
   return new
 end
 
@@ -155,7 +167,16 @@ local function place(rig, predict)
     x, y = x + x - last.x, y + y - last.y
   end
   rig.last = predict and pos or nil
-  local a = wagon.orientation * 2 * math.pi
+  -- in curves the wagon turns too: predict its orientation the same way
+  local o = wagon.orientation
+  local last_o = rig.last_orientation
+  if predict and last_o then
+    local d = o - last_o
+    if d > 0.5 then d = d - 1 elseif d < -0.5 then d = d + 1 end
+    o = o + d
+  end
+  rig.last_orientation = predict and wagon.orientation or nil
+  local a = o * 2 * math.pi
   -- The mounts follow the drawn (foreshortened) roof, not the world.
   local ax, ay = math.sin(a), -math.cos(a) * FORESHORTEN
   -- to the right of the wagon's front
@@ -252,9 +273,14 @@ local function refill_ammo(rig, kind)
   local cargo = supply(rig.wagon)
   if not cargo or cargo.is_empty() then return end
   local accepts = accepted(kind)
-  for _, turret in pairs(rig.turrets) do
+  local tick = game.tick
+  for i, turret in pairs(rig.turrets) do
     local ammo = turret_ammo(turret)
     local need = kind.refill - ammo.get_item_count()
+    -- A turret with a reload gets its next round only when the reload is over. Swapping it for
+    -- another variant (in curves) makes a new entity without the cooldown; empty, it waits anyway.
+    local fired = kind.reload and rig.fired and rig.fired[i]
+    if fired and tick - fired < kind.reload - REFILL_INTERVAL then need = 0 end
     if need > 0 then
       local loaded = ammo[1].valid_for_read and ammo[1]
       for _, stack in pairs(cargo.get_contents()) do
@@ -294,12 +320,69 @@ local function refill_fluid(rig, kind)
   end
 end
 
+-- Alt mode icons of what each turret is loaded with, drawn above the turret's mount
+-- (the turret entity itself sits sunk south of it, see place()).
+update_icons = function(rig, kind)
+  rig.icons = rig.icons or {}
+  for i, turret in pairs(rig.turrets) do
+    local sprite
+    if kind.fluid then
+      local name = next(turret.get_fluid_contents())
+      sprite = name and "fluid/" .. name
+    else
+      local stack = turret_ammo(turret)[1]
+      sprite = stack.valid_for_read and "item/" .. original_item(stack.name)
+    end
+    local icon = rig.icons[i]
+    local sink = rig.elevated and 0 or rigging.sink(rig.sinks and rig.sinks[i] or 0)
+    if icon and (not icon.object.valid or icon.sprite ~= sprite or icon.sink ~= sink) then
+      if icon.object.valid then icon.object.destroy() end
+      icon = nil
+      rig.icons[i] = nil
+    end
+    if sprite and not icon then
+      rig.icons[i] = {
+        object = rendering.draw_sprite({
+          sprite = sprite,
+          target = { entity = turret, offset = { 0, -sink - ICON_LIFT } },
+          surface = turret.surface,
+          x_scale = 0.5,
+          y_scale = 0.5,
+          render_layer = "entity-info-icon",
+          only_in_alt_mode = true,
+        }),
+        sprite = sprite,
+        sink = sink,
+      }
+    end
+  end
+end
+
 local function refill(rig)
   local kind = KINDS[rig.kind]
   if kind.fluid then
     refill_fluid(rig, kind)
   else
     refill_ammo(rig, kind)
+  end
+  update_icons(rig, kind)
+end
+
+-- A basket of the mine launcher fired: note when, for its reload (see refill_ammo).
+local function on_script_trigger(event)
+  if event.effect_id ~= "military-wagons-basket-shot" then return end
+  local basket = event.source_entity
+  if not (basket and basket.valid) then return end
+  for _, rig in pairs(storage.rigs) do
+    if KINDS[rig.kind].reload then
+      for i, turret in pairs(rig.turrets) do
+        if turret == basket then
+          rig.fired = rig.fired or {}
+          rig.fired[i] = event.tick
+          return
+        end
+      end
+    end
   end
 end
 
@@ -342,9 +425,6 @@ local function on_built(event)
   if wagon and wagon.valid and KINDS[wagon.name] then create_rig(wagon) end
 end
 
--- The original of a shell copy, or the item itself.
-local function original_item(name)
-  if name:sub(1, #config.shell_prefix) ~= config.shell_prefix then return name end
   local original = name:sub(#config.shell_prefix + 1)
   return prototypes.item[original] and original or name
 end
@@ -777,6 +857,9 @@ if next(ARMORED_NAMES) then
   script.on_event(defines.events.on_gui_closed, on_gui_closed)
   script.on_event(defines.events.on_player_placed_equipment, on_equipment_changed)
   script.on_event(defines.events.on_player_removed_equipment, on_equipment_changed)
+end
+for _, kind in pairs(KINDS) do
+  if kind.reload then script.on_event(defines.events.on_script_trigger_effect, on_script_trigger) end
 end
 script.on_event(defines.events.on_object_destroyed, on_destroyed)
 script.on_nth_tick(REFILL_INTERVAL, on_refill)

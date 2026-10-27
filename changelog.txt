@@ -7,6 +7,8 @@ Date: 2026-10-26
     - The mine launcher wagon has six launcher baskets that turn and fire on their own, each once every 10 seconds. Each click with the remote fires one basket.
   Bugfixes:
     - The mine launcher wagon no longer shows a vanilla artillery cannon floating next to it. The launcher baskets on the wagon fire the mines.
+    - Roof turrets follow the wagon more closely in curves: the script now also predicts the wagon turning.
+    - In alt mode the ammo icons of the roof turrets are shown on the turrets, no longer below them.
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.0
 Date: 2026-10-26

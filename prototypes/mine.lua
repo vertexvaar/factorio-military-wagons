@@ -12,8 +12,8 @@ local graphics = require("prototypes.graphics")
 local CATEGORY = "wagon-mine"
 local BASKET_CATEGORY = wagon_config.shell_prefix .. "wagon-mine"
 local BASKET_AMMO = wagon_config.shell_prefix .. "wagon-mine"
--- each basket throws one package every 10 seconds
-local BASKET_COOLDOWN = 600
+-- control.lua notes each basket's shot with this script trigger
+local SHOT_EFFECT = "military-wagons-basket-shot"
 local RANGE = 120
 local MIN_RANGE = 16
 -- one thrown mine is a package of this many land mines, scattered around the target
@@ -68,7 +68,7 @@ return function(config)
   local basket_gun = table.deepcopy(gun)
   basket_gun.name = config.turret
   basket_gun.attack_parameters.ammo_category = BASKET_CATEGORY
-  basket_gun.attack_parameters.cooldown = BASKET_COOLDOWN
+  basket_gun.attack_parameters.cooldown = config.reload
   basket_gun.attack_parameters.projectile_creation_distance = 0
   basket_gun.attack_parameters.projectile_center = { 0, 0 }
   basket_gun.attack_parameters.projectile_creation_parameters = nil
@@ -82,6 +82,8 @@ return function(config)
   basket.ammo_stack_limit = config.refill
   basket.automated_ammo_count = nil
   basket.disable_automatic_firing = true
+  -- the remote's flares count as manual targets: no range bonus over the 120 tiles
+  basket.manual_range_modifier = 1
   basket.alert_when_attacking = false
   basket.turret_rotation_speed = 0.01
   basket.turn_after_shooting_cooldown = 0
@@ -125,6 +127,14 @@ return function(config)
   local shell = data.raw["ammo"]["artillery-shell"]
   local ammo_type = table.deepcopy(shell.ammo_type)
   ammo_type.action.action_delivery.projectile = "wagon-mine-projectile"
+
+  -- the baskets' copy tells control.lua which basket fired
+  local basket_ammo_type = table.deepcopy(ammo_type)
+  local delivery = basket_ammo_type.action.action_delivery
+  local source_effects = delivery.source_effects or {}
+  if source_effects.type then source_effects = { source_effects } end
+  source_effects[#source_effects + 1] = { type = "script", effect_id = SHOT_EFFECT }
+  delivery.source_effects = source_effects
 
   local flare = table.deepcopy(data.raw["artillery-flare"]["artillery-flare"])
   flare.name = "mine-launcher-flare"
@@ -170,7 +180,7 @@ return function(config)
         { icon = "__base__/graphics/icons/explosives.png", icon_size = 64, scale = 0.3, shift = { 8, 8 } },
       },
       ammo_category = BASKET_CATEGORY,
-      ammo_type = table.deepcopy(ammo_type),
+      ammo_type = basket_ammo_type,
       hidden = true,
       hidden_in_factoriopedia = true,
       auto_recycle = false,

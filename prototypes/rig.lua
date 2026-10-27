@@ -85,6 +85,9 @@ function rig.hide(turret, name)
     "not-in-kill-statistics",
     "no-automated-item-insertion",
     "no-automated-item-removal",
+    -- alt mode would show the ammo where the turret entity is, not where it is drawn;
+    -- control.lua draws the icons at the drawn turret instead
+    "hide-alt-info",
   }
   turret.hidden = true
   turret.hidden_in_factoriopedia = true
