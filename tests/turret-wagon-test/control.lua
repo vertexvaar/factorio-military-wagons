@@ -131,14 +131,21 @@ local function load_of(entity)
   return inv.get_item_count(SPEC.ammo) + (prototypes.item[copy] and inv.get_item_count(copy) or 0)
 end
 
+-- Where the wagon's drawn front points: the sprites have back equal to front, so the game
+-- draws a wagon turned round (orientation + 0.5) the same; which half it picks follows its
+-- choice among 256 directions, as in the mod.
+local function drawn(wagon)
+  local o = wagon.orientation
+  return (math.floor(o * 256 + 0.5) % 256 >= 128 and o - 0.5 or o) % 1
+end
+
 -- offset: tiles along the wagon axis, or { along, across } with across to the right of the front
 local function mount(wagon, offset)
   local along, across = offset, 0
   if type(offset) == "table" then
     along, across = offset[1], offset[2]
   end
-  -- the wagon sprites have back equal to front: the mounts follow the drawn front
-  local a = (wagon.orientation % 0.5) * 2 * math.pi
+  local a = drawn(wagon) * 2 * math.pi
   -- the mod mounts on the drawn wagon and foreshortens north-south offsets like its sprite
   local draw = wagon.draw_data.position
   local f = math.sin(math.rad(50))
@@ -706,7 +713,7 @@ end
 local function basket_offset(wagon)
   local worst = 0
   for _, t in pairs(turrets(wagon)) do
-    local d = (t.relative_turret_orientation - wagon.orientation % 0.5) % 1
+    local d = (t.relative_turret_orientation - drawn(wagon)) % 1
     worst = math.max(worst, math.min(d, 1 - d))
   end
   return worst
