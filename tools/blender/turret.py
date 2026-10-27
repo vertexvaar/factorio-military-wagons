@@ -86,43 +86,69 @@ def howitzer(m):
 
 
 def mine_basket(m):
-    """One launcher basket on its pivot: a turning yoke with two cheeks, and the armoured
-    basket between them, tilted up towards the front, a mine package in its mouth.
-    Modelled around its own mount (the origin), at its height on the wagon. Points north (+Y)."""
+    """One mine launcher like the Skorpion's: a turning base, a cradle of cross-braced side frames
+    and between them the launcher box, tilted up towards the front, whose face holds a grid of
+    5 x 4 tubes. Modelled around its own mount (the origin), at its height on the wagon.
+    Points north (+Y)."""
     base = wagon.VARIANTS["mine"]["top"]
     radius = wagon.VARIANTS["mine"]["radius"]
-    rig.cylinder("yoke_plate", (0, 0, base), (0, 0, base + 0.05), radius - 0.03, m["armour"], verts=32, mask=True)
-    pivot_z = base + 0.2
+    # turning base with a bolted ring
+    rig.cylinder("base_plate", (0, 0, base), (0, 0, base + 0.05), radius - 0.02, m["armour"], verts=40, mask=True)
+    for k in range(10):
+        a = 2 * math.pi * k / 10
+        r = radius - 0.06
+        rig.cylinder(f"base_bolt{k}", (math.cos(a) * r, math.sin(a) * r, base + 0.05),
+                     (math.cos(a) * r, math.sin(a) * r, base + 0.065), 0.012, m["rivet"], verts=8)
+    width, depth, face = 0.72, 0.5, 0.46  # box across, along the tubes, height of the face
+    pivot = (0, -0.04, base + 0.3)
+    # cradle: a cross-braced side frame on each side, carrying the trunnion
     for sx in (-1, 1):
-        rig.box(f"cheek{sx}", (sx * 0.19, -0.02, base + 0.13), (0.035, 0.24, 0.22), m["armour"], mask=True)
-        rig.cylinder(f"trunnion{sx}", (sx * 0.17, 0, pivot_z), (sx * 0.22, 0, pivot_z), 0.035, m["steel"], verts=12)
-    tilt = math.radians(35)
-    d = (0, math.cos(tilt), math.sin(tilt))  # along the basket, towards the mouth
-    up = (0, -math.sin(tilt), math.cos(tilt))  # out of the basket's top face
-    length, width, height = 0.46, 0.3, 0.26
+        x = sx * (width / 2 + 0.035)
+        for k, (y0, y1) in enumerate(((-0.24, 0.0), (0.18, 0.0))):
+            rig.cylinder(f"leg{sx}{k}", (x, y0, base + 0.05), (x, pivot[1] + y1, pivot[2]), 0.018, m["armour"], verts=8)
+        rig.cylinder(f"brace{sx}", (x, -0.2, base + 0.08), (x, 0.14, base + 0.08), 0.014, m["armour"], verts=8)
+        rig.cylinder(f"cross{sx}a", (x, -0.2, base + 0.08), (x, 0.08, base + 0.22), 0.01, m["steel"], verts=6)
+        rig.cylinder(f"cross{sx}b", (x, 0.14, base + 0.08), (x, -0.14, base + 0.22), 0.01, m["steel"], verts=6)
+        rig.cylinder(f"trunnion{sx}", (sx * (width / 2 - 0.01), pivot[1], pivot[2]),
+                     (sx * (width / 2 + 0.07), pivot[1], pivot[2]), 0.035, m["steel"], verts=12)
+    tilt = math.radians(40)
+    d = (0, math.cos(tilt), math.sin(tilt))  # along the tubes, out of the face
+    up = (0, -math.sin(tilt), math.cos(tilt))  # the box's top side
 
-    def at(t, h=0.0):
-        return (0, d[1] * t + up[1] * h, pivot_z + d[2] * t + up[2] * h)
+    def at(t, h=0.0, x=0.0):
+        return (x, pivot[1] + d[1] * t + up[1] * h, pivot[2] + d[2] * t + up[2] * h)
 
     rot = (tilt, 0, 0)
-    rig.box("basket", at(0.04), (width, length, height), m["armour"], bevel=0.015, mask=True, rotation=rot)
-    rig.box("basket_band", at(-0.1), (width + 0.012, 0.05, height + 0.012), m["hazard"], bevel=0, rotation=rot)
-    rig.box("basket_lip", at(0.04 + length / 2 - 0.02), (width + 0.03, 0.04, height + 0.03), m["steel"], rotation=rot)
-    rig.box("basket_mouth", at(0.04 + length / 2 + 0.001), (width - 0.06, 0.01, height - 0.06), m["slit"], bevel=0, rotation=rot)
-    # the package's nose in the mouth: a land mine with its brass fuse
-    nose = at(0.04 + length / 2 - 0.01)
-    tip = at(0.04 + length / 2 + 0.03)
-    rig.cylinder("package", nose, tip, 0.09, m["dark"], verts=20)
-    rig.cylinder("fuse", tip, at(0.04 + length / 2 + 0.05), 0.03, m["brass"], verts=12)
-    # rivets along the top edges, a handle at the back
+    # the box hangs a little behind its pivot, so the face stands out in front
+    c = 0.02
+    rig.box("launcher", at(c), (width, depth, face), m["armour"], bevel=0.012, mask=True, rotation=rot)
+    # angle profiles along the edges and two bands round the box
     for sx in (-1, 1):
-        for k in range(5):
-            t = -0.18 + k * 0.1
-            p = at(0.04 + t, height / 2 + 0.004)
-            rig.cylinder(f"rivet{sx}{k}", (sx * (width / 2 - 0.03), p[1], p[2]),
-                         (sx * (width / 2 - 0.03), p[1] + up[1] * 0.012, p[2] + up[2] * 0.012), 0.012, m["rivet"], verts=8)
-    rig.box("handle", at(0.04 - length / 2 - 0.02, 0.02), (0.14, 0.02, 0.03), m["steel"], bevel=0, rotation=rot)
-    rig.cylinder("cable", at(0.04 - length / 2), (0, -0.2, base + 0.06), 0.015, m["dark"], verts=8)
+        for sh in (-1, 1):
+            rig.box(f"edge{sx}{sh}", at(c, sh * face / 2, sx * width / 2), (0.035, depth + 0.01, 0.035), m["steel"], bevel=0.004, rotation=rot)
+    for k, t in enumerate((-0.12, 0.12)):
+        rig.box(f"band{k}", at(c + t), (width + 0.014, 0.04, face + 0.014), m["dark" if k else "hazard"], bevel=0, rotation=rot)
+    # the face: a steel plate with 5 x 4 tubes, each a dark bore in a rim
+    front = c + depth / 2
+    rig.box("face", at(front + 0.005), (width - 0.02, 0.012, face - 0.02), m["steel"], bevel=0.004, rotation=rot)
+    for i in range(5):
+        for j in range(4):
+            x = (i - 2) * (width - 0.12) / 4
+            h = (j - 1.5) * (face - 0.1) / 3
+            rig.cylinder(f"tube{i}{j}", at(front + 0.004, h, x), at(front + 0.03, h, x), 0.05, m["paint"], verts=14)
+            rig.cylinder(f"bore{i}{j}", at(front + 0.025, h, x), at(front + 0.032, h, x), 0.036, m["slit"], verts=14)
+    # back plate with a cable plug, lifting eyes on top, rivets along the top
+    rig.box("back", at(c - depth / 2 - 0.006), (width - 0.06, 0.012, face - 0.06), m["dark"], bevel=0, rotation=rot)
+    rig.cylinder("plug", at(c - depth / 2 - 0.01, -0.1, 0.2), at(c - depth / 2 - 0.06, -0.1, 0.2), 0.03, m["brass"], verts=10)
+    rig.cylinder("cable", at(c - depth / 2 - 0.06, -0.1, 0.2), (0.22, -0.3, base + 0.06), 0.014, m["dark"], verts=8)
+    for sx in (-1, 1):
+        rig.torus(f"eye{sx}", at(c, face / 2 + 0.03, sx * 0.24), 0.03, 0.008, m["steel"], rotation=(tilt, math.pi / 2, 0))
+        for k in range(6):
+            rig.cylinder(f"rivet{sx}{k}", at(c - 0.2 + k * 0.08, face / 2 + 0.002, sx * (width / 2 - 0.05)),
+                         at(c - 0.2 + k * 0.08, face / 2 + 0.014, sx * (width / 2 - 0.05)), 0.011, m["rivet"], verts=8)
+    # elevation ram from the base to the box's underside
+    rig.cylinder("ram", (0, 0.2, base + 0.06), at(c + 0.12, -face / 2), 0.03, m["steel"], verts=10)
+    rig.cylinder("ram_body", (0, 0.2, base + 0.06), (0, 0.17, base + 0.16), 0.045, m["dark"], verts=12)
 
 
 def build(variant):

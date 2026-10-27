@@ -34,8 +34,8 @@ VARIANTS = {
     "howitzer": {"mounts": (0.0,), "radius": 0.86, "top": DECK + 0.16},
     # six launcher baskets (tools/blender/turret.py, rendered as mine-turret), each on a pivot
     # plate; mounts as (along, across), like config.lua
-    "mine": {"mounts": ((-1.62, -0.5), (-1.0, -0.5), (-0.38, -0.5), (-1.62, 0.5), (-1.0, 0.5), (-0.38, 0.5)),
-             "radius": 0.22, "top": 1.38},
+    "mine": {"mounts": ((-2.05, -0.47), (-0.95, -0.47), (0.15, -0.47), (-2.05, 0.47), (-0.95, 0.47), (0.15, 0.47)),
+             "radius": 0.3, "top": 1.38},
 }
 
 
@@ -106,8 +106,11 @@ def underframe(m):
 
 
 def ends(m, ladder_top):
-    """End platforms with buffers, couplers, railings and a ladder up to ladder_top."""
+    """End platforms with buffers, couplers, railings and a ladder up to ladder_top,
+    or up to (rear, front) when the ends differ."""
+    tops = ladder_top if isinstance(ladder_top, tuple) else (ladder_top, ladder_top)
     for sy in (-1, 1):
+        ladder_top = tops[0] if sy < 0 else tops[1]
         rig.box(f"platform{sy}", (0, sy * (END_Y - 0.25), SILL - 0.02), (1.9, 0.5, 0.05), m["steel"])
         for k in range(4):
             rig.box(f"tread{sy}{k}", (0, sy * (END_Y - 0.44 + k * 0.1), SILL + 0.008), (1.8, 0.02, 0.01), m["dark"], bevel=0)
@@ -345,11 +348,30 @@ def mine_launcher(m):
     rig.box("cab_window", (0, cab_y1 + 0.005, cab_top - 0.22), (1.2, 0.02, 0.08), m["slit"], bevel=0)
     rivet_row("cab_rivets", (-HALF_W + 0.1, cab_y0 - 0.005, cab_top - 0.05), (HALF_W - 0.1, cab_y0 - 0.005, cab_top - 0.05), 12, m,
               radius=0.014, axis="y")
-    # a riveted base frame with six pivot plates; the baskets on them are turrets of their own
+    # a riveted base frame with six pivot rings; the launchers on them are turrets of their own
     v = VARIANTS["mine"]
-    rig.box("basket_frame", (0, -1.0, 1.33), (1.6, 1.9, 0.06), m["dark"])
-    rivet_row("basket_frame_rivets_l", (-0.78, -1.9, 1.365), (-0.78, -0.1, 1.365), 10, m, radius=0.014, axis="z")
-    rivet_row("basket_frame_rivets_r", (0.78, -1.9, 1.365), (0.78, -0.1, 1.365), 10, m, radius=0.014, axis="z")
+    y0, y1 = -2.55, 0.6
+    rig.box("basket_frame", (0, (y0 + y1) / 2, 1.33), (1.84, y1 - y0, 0.06), m["dark"])
+    for sx in (-1, 1):
+        rivet_row(f"basket_frame_rivets{sx}", (sx * 0.9, y0 + 0.05, 1.365), (sx * 0.9, y1 - 0.05, 1.365), 16, m,
+                  radius=0.014, axis="z")
+        # cable conduit along the deck edge, with clamps, to each launcher's junction box
+        rig.cylinder(f"conduit{sx}", (sx * 0.86, y0 + 0.1, 1.39), (sx * 0.86, 1.15, 1.39), 0.022, m["dark"], verts=10)
+        for k in range(8):
+            y = y0 + 0.2 + k * (1.15 - y0 - 0.3) / 7
+            rig.box(f"conduit_clamp{sx}{k}", (sx * 0.86, y, 1.39), (0.06, 0.03, 0.06), m["steel"], bevel=0)
+    # centre spine between the rows: the ammunition feed with a hatch per launcher pair
+    rig.box("feed_spine", (0, (y0 + y1) / 2, 1.4), (0.16, y1 - y0 - 0.1, 0.1), m["armour"], mask=True)
+    for i, along in enumerate((-2.05, -0.95, 0.15)):
+        rig.box(f"feed_hatch{i}", (0, along, 1.455), (0.12, 0.3, 0.015), m["steel"])
+        rig.box(f"feed_hatch_handle{i}", (0, along - 0.1, 1.47), (0.06, 0.02, 0.02), m["dark"], bevel=0)
+    # fire control box and aerial on the cab's rear wall, stowage boxes behind the cab
+    rig.box("fire_control", (0.55, 1.12, 1.62), (0.5, 0.14, 0.4), m["armour"], mask=True)
+    rig.box("fire_control_lamp", (0.4, 1.045, 1.74), (0.05, 0.01, 0.05), m["lamp"], bevel=0)
+    rig.box("fire_control_dial", (0.62, 1.045, 1.6), (0.18, 0.01, 0.12), m["slit"], bevel=0)
+    rig.cylinder("aerial", (0.75, 1.5, 2.04), (0.75, 1.5, 2.9), 0.012, m["dark"], verts=6)
+    for k, x in enumerate((-0.62, -0.25)):
+        crate(f"stowage{k}", m, (x, 0.98, 1.47), (0.32, 0.26, 0.26))
     for i, (along, across) in enumerate(v["mounts"]):
         rig.cylinder(f"pivot{i}", (across, along, 1.36), (across, along, v["top"]), v["radius"], m["steel"], verts=32)
         for k in range(8):
@@ -357,12 +379,8 @@ def mine_launcher(m):
             r = v["radius"] - 0.035
             rig.cylinder(f"pivot{i}_bolt{k}", (across + math.cos(a) * r, along + math.sin(a) * r, v["top"]),
                          (across + math.cos(a) * r, along + math.sin(a) * r, v["top"] + 0.015), 0.012, m["rivet"], verts=8)
-    # ammunition chutes between the rows, feeding the baskets from the wagon
-    for k in range(3):
-        rig.box(f"chute{k}", (0, -1.62 + 0.62 * k, 1.42), (0.5, 0.14, 0.12), m["armour"], mask=True)
-    # spare mine crates on the rear platform
-    for k, x in enumerate((-0.5, 0.5)):
-        crate(f"mine_crate{k}", m, (x, -2.35, 1.42), (0.38, 0.4, 0.2))
+        # junction box with the cable to the launcher
+        rig.box(f"junction{i}", (across + (0.36 if across > 0 else -0.36), along + 0.3, 1.43), (0.1, 0.12, 0.1), m["steel"])
 
 
 def build(variant):
@@ -391,7 +409,8 @@ def build(variant):
         rig.camera(8, 8.5, shift_y=1.2)
     elif variant == "mine":
         mine_launcher(m)
-        ends(m, 2.0)
+        # the rear ladder only reaches the low launcher deck, the front one the cab roof
+        ends(m, (1.3, 2.0))
         rig.camera(8, 9, shift_y=1.4)
     else:
         sys.exit(f"unknown variant {variant}")
