@@ -1,0 +1,9 @@
+{
+  "name": "artillery-park-probe",
+  "version": "0.0.1",
+  "title": "Artillery parking probe",
+  "author": "vertexvaar",
+  "factorio_version": "2.1",
+  "description": "Logs how artillery wagons park their cannon when a train sets off. Development only.",
+  "dependencies": ["base", "military-wagons"]
+}
