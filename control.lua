@@ -18,6 +18,7 @@ local FORESHORTEN = rigging.FORESHORTEN
 
 ---@class Kind one entry of config.wagons, plus:
 ---@field sink_steps integer
+---@field symmetric boolean every mount has its mirror image through the wagon centre
 
 -- KINDS[wagon name] = Kind, only the turret wagons switched on in the startup settings
 local KINDS = {}
@@ -32,6 +33,17 @@ for _, kind in pairs(config.enabled()) do
   ARMORED[kind.name] = true
   if #kind.mounts > 0 then
     kind.sink_steps = rigging.sink_steps(kind.mounts)
+    -- every mount has its mirror image through the wagon centre
+    kind.symmetric = true
+    for _, m in pairs(kind.mounts) do
+      local along, across = rigging.mount(m)
+      local mirrored = false
+      for _, n in pairs(kind.mounts) do
+        local a2, c2 = rigging.mount(n)
+        if math.abs(a2 + along) < 1e-6 and math.abs(c2 + across) < 1e-6 then mirrored = true end
+      end
+      kind.symmetric = kind.symmetric and mirrored
+    end
     KINDS[kind.name] = kind
     WAGON_NAMES[#WAGON_NAMES + 1] = kind.name
     for _, range in pairs(kind.min_ranges or { false }) do
@@ -50,7 +62,9 @@ end
 -- show the sprite of the opposite one. Taking the half from that pick (not orientation % 0.5)
 -- keeps wagons running north-south, which wobble around 0.5 and 1, from flipping their mounts.
 local function drawn(kind, orientation)
-  if kind.full_turn then return orientation % 1 end
+  -- symmetric mounts look the same from either end: no need to pick a half, which can be off
+  -- by a tick where the wagon turns into a north-south line
+  if kind.full_turn or kind.symmetric then return orientation % 1 end
   local half = math.floor(orientation * 256 + 0.5) % 256 >= 128
   return half and orientation - 0.5 or orientation
 end
