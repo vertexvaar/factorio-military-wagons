@@ -142,7 +142,7 @@ local function swap(rig, i, elevated, sink)
   else
     new.orientation = old.orientation
   end
-  new.active = old.active
+  new.disabled_by_script = old.disabled_by_script
   old.destroy()
   rig.turrets[i] = new
   rig.sinks[i] = sink
@@ -203,7 +203,7 @@ local function place(rig, predict)
     if kind.park_speed and predict then
       -- on the move the baskets are off and face the wagon's front; if the train set off
       -- before they were home (a train the lock does not hold), they jump there
-      if turret.active then turret.active = false end
+      if not turret.disabled_by_script then turret.disabled_by_script = true end
       turret.relative_turret_orientation = o % 1
     end
   end
@@ -471,7 +471,7 @@ local function supervise(rig)
   if wagon.speed ~= 0 or rig.parking or not intact(rig) then return end
   local active = not wants_to_go(wagon.train)
   for _, turret in pairs(rig.turrets) do
-    if turret.active ~= active then turret.active = active end
+    if turret.disabled_by_script == active then turret.disabled_by_script = not active end
   end
   local home = wagon.orientation
   local out = false
