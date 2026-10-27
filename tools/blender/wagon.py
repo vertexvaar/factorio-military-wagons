@@ -32,8 +32,10 @@ VARIANTS = {
     "twin": {"mounts": (-1.6, 1.6), "radius": 0.7, "top": DECK + 0.18},
     # one big ring for the howitzer turret (tools/blender/turret.py, rendered as howitzer-turret)
     "howitzer": {"mounts": (0.0,), "radius": 0.86, "top": DECK + 0.16},
-    # the launcher racks do not turn; no mounts
-    "mine": {"mounts": (), "radius": 0, "top": DECK},
+    # six launcher baskets (tools/blender/turret.py, rendered as mine-turret), each on a pivot
+    # plate; mounts as (along, across), like config.lua
+    "mine": {"mounts": ((-1.62, -0.5), (-1.0, -0.5), (-0.38, -0.5), (-1.62, 0.5), (-1.0, 0.5), (-0.38, 0.5)),
+             "radius": 0.22, "top": 1.38},
 }
 
 
@@ -343,18 +345,21 @@ def mine_launcher(m):
     rig.box("cab_window", (0, cab_y1 + 0.005, cab_top - 0.22), (1.2, 0.02, 0.08), m["slit"], bevel=0)
     rivet_row("cab_rivets", (-HALF_W + 0.1, cab_y0 - 0.005, cab_top - 0.05), (HALF_W - 0.1, cab_y0 - 0.005, cab_top - 0.05), 12, m,
               radius=0.014, axis="y")
-    # turntable with two rows of three launcher baskets, tilted outwards and to the rear
-    rig.cylinder("turntable", (0, -1.0, 1.3), (0, -1.0, 1.42), 0.95, m["steel"], verts=48)
-    rig.box("rack_frame", (0, -1.0, 1.5), (0.5, 1.9, 0.16), m["dark"])
-    for sx in (-1, 1):
-        for k in range(3):
-            y = -1.0 + (k - 1) * 0.62
-            basket = rig.box(f"basket{sx}{k}", (sx * 0.5, y, 1.78), (0.42, 0.56, 0.5), m["armour"], mask=True,
-                             rotation=(math.radians(-15), sx * math.radians(30), 0))
-            rig.box(f"basket_mouth{sx}{k}", (sx * 0.62, y - 0.06, 1.98), (0.3, 0.44, 0.04), m["slit"], bevel=0,
-                    rotation=(math.radians(-15), sx * math.radians(30), 0))
-            rig.box(f"basket_band{sx}{k}", (sx * 0.5, y, 1.72), (0.44, 0.58, 0.05), m["hazard"], bevel=0,
-                    rotation=(math.radians(-15), sx * math.radians(30), 0))
+    # a riveted base frame with six pivot plates; the baskets on them are turrets of their own
+    v = VARIANTS["mine"]
+    rig.box("basket_frame", (0, -1.0, 1.33), (1.6, 1.9, 0.06), m["dark"])
+    rivet_row("basket_frame_rivets_l", (-0.78, -1.9, 1.365), (-0.78, -0.1, 1.365), 10, m, radius=0.014, axis="z")
+    rivet_row("basket_frame_rivets_r", (0.78, -1.9, 1.365), (0.78, -0.1, 1.365), 10, m, radius=0.014, axis="z")
+    for i, (along, across) in enumerate(v["mounts"]):
+        rig.cylinder(f"pivot{i}", (across, along, 1.36), (across, along, v["top"]), v["radius"], m["steel"], verts=32)
+        for k in range(8):
+            a = 2 * math.pi * k / 8
+            r = v["radius"] - 0.035
+            rig.cylinder(f"pivot{i}_bolt{k}", (across + math.cos(a) * r, along + math.sin(a) * r, v["top"]),
+                         (across + math.cos(a) * r, along + math.sin(a) * r, v["top"] + 0.015), 0.012, m["rivet"], verts=8)
+    # ammunition chutes between the rows, feeding the baskets from the wagon
+    for k in range(3):
+        rig.box(f"chute{k}", (0, -1.62 + 0.62 * k, 1.42), (0.5, 0.14, 0.12), m["armour"], mask=True)
     # spare mine crates on the rear platform
     for k, x in enumerate((-0.5, 0.5)):
         crate(f"mine_crate{k}", m, (x, -2.35, 1.42), (0.38, 0.4, 0.2))

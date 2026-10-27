@@ -1,4 +1,4 @@
-"""Turret heads that the game draws on top of a wagon: howitzer (howitzer).
+"""Turret heads that the game draws on top of a wagon: howitzer (howitzer), mine launcher basket (mine).
 
 Run:  blender -b --factory-startup -P tools/blender/turret.py -- <variant> <out_dir> [frames...]
 Frames are 0..63, frame i shows the barrel pointing at orientation i/64 (clockwise from north).
@@ -85,12 +85,55 @@ def howitzer(m):
         rig.torus(f"eye{sx}", (sx * 0.5, 0.15, top + 0.04), 0.04, 0.012, m["steel"], rotation=(0, math.pi / 2, 0))
 
 
+def mine_basket(m):
+    """One launcher basket on its pivot: a turning yoke with two cheeks, and the armoured
+    basket between them, tilted up towards the front, a mine package in its mouth.
+    Modelled around its own mount (the origin), at its height on the wagon. Points north (+Y)."""
+    base = wagon.VARIANTS["mine"]["top"]
+    radius = wagon.VARIANTS["mine"]["radius"]
+    rig.cylinder("yoke_plate", (0, 0, base), (0, 0, base + 0.05), radius - 0.03, m["armour"], verts=32, mask=True)
+    pivot_z = base + 0.2
+    for sx in (-1, 1):
+        rig.box(f"cheek{sx}", (sx * 0.19, -0.02, base + 0.13), (0.035, 0.24, 0.22), m["armour"], mask=True)
+        rig.cylinder(f"trunnion{sx}", (sx * 0.17, 0, pivot_z), (sx * 0.22, 0, pivot_z), 0.035, m["steel"], verts=12)
+    tilt = math.radians(35)
+    d = (0, math.cos(tilt), math.sin(tilt))  # along the basket, towards the mouth
+    up = (0, -math.sin(tilt), math.cos(tilt))  # out of the basket's top face
+    length, width, height = 0.46, 0.3, 0.26
+
+    def at(t, h=0.0):
+        return (0, d[1] * t + up[1] * h, pivot_z + d[2] * t + up[2] * h)
+
+    rot = (tilt, 0, 0)
+    rig.box("basket", at(0.04), (width, length, height), m["armour"], bevel=0.015, mask=True, rotation=rot)
+    rig.box("basket_band", at(-0.1), (width + 0.012, 0.05, height + 0.012), m["hazard"], bevel=0, rotation=rot)
+    rig.box("basket_lip", at(0.04 + length / 2 - 0.02), (width + 0.03, 0.04, height + 0.03), m["steel"], rotation=rot)
+    rig.box("basket_mouth", at(0.04 + length / 2 + 0.001), (width - 0.06, 0.01, height - 0.06), m["slit"], bevel=0, rotation=rot)
+    # the package's nose in the mouth: a land mine with its brass fuse
+    nose = at(0.04 + length / 2 - 0.01)
+    tip = at(0.04 + length / 2 + 0.03)
+    rig.cylinder("package", nose, tip, 0.09, m["dark"], verts=20)
+    rig.cylinder("fuse", tip, at(0.04 + length / 2 + 0.05), 0.03, m["brass"], verts=12)
+    # rivets along the top edges, a handle at the back
+    for sx in (-1, 1):
+        for k in range(5):
+            t = -0.18 + k * 0.1
+            p = at(0.04 + t, height / 2 + 0.004)
+            rig.cylinder(f"rivet{sx}{k}", (sx * (width / 2 - 0.03), p[1], p[2]),
+                         (sx * (width / 2 - 0.03), p[1] + up[1] * 0.012, p[2] + up[2] * 0.012), 0.012, m["rivet"], verts=8)
+    rig.box("handle", at(0.04 - length / 2 - 0.02, 0.02), (0.14, 0.02, 0.03), m["steel"], bevel=0, rotation=rot)
+    rig.cylinder("cable", at(0.04 - length / 2), (0, -0.2, base + 0.06), 0.015, m["dark"], verts=8)
+
+
 def build(variant):
     rig.reset()
     m = wagon.materials()
     if variant == "howitzer":
         howitzer(m)
         rig.camera(8, 8, shift_y=1.4)
+    elif variant == "mine":
+        mine_basket(m)
+        rig.camera(4, 4, shift_y=1.0)
     else:
         sys.exit(f"unknown turret {variant}")
     rig.sun()
