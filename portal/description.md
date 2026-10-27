@@ -9,7 +9,7 @@ Armoured train wagons with turrets on their roof: machine guns, flamethrowers, r
 - **Rocket wagon**: a cargo wagon with two rocket launchers, range 36. With Space Age they are rocket turrets, without it they have the rocket launcher's stats. Minimum range 8, so the explosions stay clear of the train. Pair it with a machine gun wagon for close defence.
 - **Twin cannon wagon**: two tank cannons, each turning all the way round. Load cannon shells into its 10 cargo slots.
 - **Howitzer wagon**: one long gun with range 36 and minimum range 12, at half the tank's rate of fire. It turns slower than a tank turret.
-- **Mine launcher wagon**: lays land mines up to 120 tiles away (minimum 16). Aim it with the mine launcher remote from the shortcut bar, like artillery. Each shot scatters a package of 5 land mines around the target. Six launcher baskets turn and fire on their own, each once every 10 seconds. Ammo: 5 land mines and 1 explosives.
+- **Mine launcher wagon**: lays land mines up to 120 tiles away (minimum 16). Aim it with the mine launcher remote from the shortcut bar, like artillery. Each shot scatters a package of 5 land mines around the target. Six launcher baskets turn and fire on their own, each once every 10 seconds, while the train stands. Like an artillery cannon, they turn home before the train sets off and hold it until they are there. Ammo: 5 land mines and 1 explosives.
 
 The cannon wagons fire their own copies of the tank shells. Those fly through your own train and on up to 40 tiles, so the wagons can shoot over the rest of the train.
 

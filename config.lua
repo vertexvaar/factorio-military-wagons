@@ -66,6 +66,9 @@ config.wagons = {
     targets = false,
     -- each basket throws one package per reload (ticks)
     reload = 600,
+    -- the baskets fire only while the train stands and turn home (turns per tick) before it
+    -- sets off, like an artillery wagon's cannon (control.lua)
+    park_speed = 0.01,
   },
 }
 

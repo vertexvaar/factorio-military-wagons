@@ -11,6 +11,8 @@ local rigging = require("prototypes.rig")
 local REFILL_INTERVAL = 30
 -- alt mode ammo icons sit this far above a turret's mount, where its head is drawn
 local ICON_LIFT = 1.0
+-- the mine launcher's own cannon turned this far holds its train (see supervise)
+local LOCKED = 0.5
 local FORESHORTEN = rigging.FORESHORTEN
 
 ---@class Kind one entry of config.wagons, plus:
@@ -56,6 +58,7 @@ local ELEVATED_RAILS = script.active_mods["elevated-rails"] ~= nil
 ---@field last_orientation number? wagon orientation on the previous tick while moving
 ---@field fired table<integer, integer>? tick of each turret's last shot (turrets with a reload)
 ---@field icons table<integer, {object: LuaRenderObject, sprite: string}>? alt mode icon of each turret
+---@field parking boolean? the baskets turn home so the train can set off (see park_step)
 
 -- storage.rigs[wagon unit number] = Rig
 
@@ -139,6 +142,7 @@ local function swap(rig, i, elevated, sink)
   else
     new.orientation = old.orientation
   end
+  new.active = old.active
   old.destroy()
   rig.turrets[i] = new
   rig.sinks[i] = sink
@@ -196,6 +200,16 @@ local function place(rig, predict)
     end
     if elevated ~= rig.elevated or sink ~= (rig.sinks[i] or 0) then turret = swap(rig, i, elevated, sink) end
     if not turret.teleport({ x + ax * along + rx * across, ty }) then return false end
+    if kind.park_speed and predict then
+      -- on the move the baskets are off and face the wagon's front; if the train set off
+      -- before they were home (a train the lock does not hold), they jump there
+      if turret.active then turret.active = false end
+      turret.relative_turret_orientation = o % 1
+    end
+  end
+  if kind.park_speed and predict and (rig.parking or wagon.relative_turret_orientation ~= 0) then
+    rig.parking = nil
+    wagon.relative_turret_orientation = 0
   end
   rig.elevated = elevated
   return true
@@ -383,6 +397,10 @@ local function on_script_trigger(event)
         if turret == basket then
           rig.fired = rig.fired or {}
           rig.fired[i] = event.tick
+          -- the basket is turned towards its target: hold the train until it is home again
+          if KINDS[rig.kind].park_speed and rig.wagon.speed == 0 and not rig.parking then
+            rig.wagon.relative_turret_orientation = LOCKED
+          end
           return
         end
       end
@@ -391,6 +409,82 @@ local function on_script_trigger(event)
 end
 
 -- Events ---------------------------------------------------------------------
+
+-- Mine launcher baskets fire only while the train stands, like an artillery wagon's cannon.
+-- The wagon's own (invisible, never firing) cannon is the lock: the engine does not let a
+-- train set off, by schedule or by hand, while that cannon is turned away from its parked
+-- position, and it never parks it by itself. So while a basket is turned away from home, the
+-- script turns the cannon (LOCKED). When the train wants to leave, the baskets are switched off
+-- and turned home at their own turning speed; then the cannon is parked and the train goes.
+-- a basket this close to its home counts as home (turns)
+local HOME = 0.002
+
+-- signed shortest turn from one orientation to another, in turns
+local function turn(from, to)
+  local d = (to - from) % 1
+  return d > 0.5 and d - 1 or d
+end
+
+local MOVING = {
+  [defines.train_state.on_the_path] = true,
+  [defines.train_state.arrive_signal] = true,
+  [defines.train_state.arrive_station] = true,
+}
+
+-- Whether a standing train is about to set off: by schedule, or a driver accelerates.
+local function wants_to_go(train)
+  if not train.manual_mode then return MOVING[train.state] or false end
+  for _, movers in pairs(train.locomotives) do
+    for _, locomotive in pairs(movers) do
+      local driver = locomotive.get_driver()
+      if driver and driver.riding_state.acceleration ~= defines.riding.acceleration.nothing then return true end
+    end
+  end
+  return false
+end
+
+-- One tick of turning the baskets home; parks the wagon's cannon when they are all there.
+local function park_step(rig)
+  local kind = KINDS[rig.kind]
+  local home = rig.wagon.orientation
+  local done = true
+  for _, turret in pairs(rig.turrets) do
+    local now = turret.relative_turret_orientation
+    local d = turn(now, home)
+    if math.abs(d) > kind.park_speed then
+      turret.relative_turret_orientation = (now + (d > 0 and kind.park_speed or -kind.park_speed)) % 1
+      done = false
+    elseif d ~= 0 then
+      turret.relative_turret_orientation = home
+    end
+  end
+  if done then
+    rig.parking = nil
+    rig.wagon.relative_turret_orientation = 0
+  end
+end
+
+-- For a standing wagon with baskets: switches them on, or off and home when the train wants
+-- to leave, and keeps the lock turned while a basket is away from home.
+local function supervise(rig)
+  local wagon = rig.wagon
+  if wagon.speed ~= 0 or rig.parking or not intact(rig) then return end
+  local active = not wants_to_go(wagon.train)
+  for _, turret in pairs(rig.turrets) do
+    if turret.active ~= active then turret.active = active end
+  end
+  local home = wagon.orientation
+  local out = false
+  for _, turret in pairs(rig.turrets) do
+    if math.abs(turn(turret.relative_turret_orientation, home)) > HOME then out = true end
+  end
+  if out and not active then
+    rig.parking = true
+  else
+    local lock = out and LOCKED or 0
+    if wagon.relative_turret_orientation ~= lock then wagon.relative_turret_orientation = lock end
+  end
+end
 
 local function on_tick()
   for id, rig in pairs(storage.rigs) do
@@ -402,6 +496,8 @@ local function on_tick()
       elseif rig.last then
         -- one more update after the train stopped, so the turrets end up exactly on the wagon
         ok = place(rig, false)
+      elseif rig.parking and intact(rig) then
+        park_step(rig)
       end
       if not ok then repair(rig) end
     else
@@ -419,8 +515,18 @@ local function on_refill()
     elseif not intact(rig) then
       repair(rig)
     else
+      if KINDS[rig.kind].park_speed then supervise(rig) end
       refill(rig)
     end
+  end
+end
+
+-- A train that sets off by schedule starts parking its baskets at once, not at the next refill.
+local function on_train_changed_state(event)
+  if not MOVING[event.train.state] then return end
+  for _, carriage in pairs(event.train.carriages) do
+    local rig = storage.rigs[carriage.unit_number]
+    if rig and KINDS[rig.kind].park_speed then supervise(rig) end
   end
 end
 
@@ -860,6 +966,7 @@ if next(ARMORED_NAMES) then
 end
 for _, kind in pairs(KINDS) do
   if kind.reload then script.on_event(defines.events.on_script_trigger_effect, on_script_trigger) end
+  if kind.park_speed then script.on_event(defines.events.on_train_changed_state, on_train_changed_state) end
 end
 script.on_event(defines.events.on_object_destroyed, on_destroyed)
 script.on_nth_tick(REFILL_INTERVAL, on_refill)

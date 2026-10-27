@@ -85,7 +85,7 @@ return function(config)
   -- the remote's flares count as manual targets: no range bonus over the 120 tiles
   basket.manual_range_modifier = 1
   basket.alert_when_attacking = false
-  basket.turret_rotation_speed = 0.01
+  basket.turret_rotation_speed = config.park_speed
   basket.turn_after_shooting_cooldown = 0
   basket.cannon_parking_frame_count = 0
   basket.base_picture = nil
