@@ -48,11 +48,29 @@ config.wagons = {
     mounts = { 0 },
     refill = 10,
   },
-  -- an artillery wagon that throws mines where the remote points; no roof turrets
+  -- an artillery wagon with six launcher baskets on its roof. Each basket is an artillery
+  -- turret of its own that throws a mine package where the remote points. The wagon's
+  -- own gun never fires; its ammo slots are the baskets' supply.
   {
     name = "mine-launcher-wagon",
+    turret = "mine-launcher-basket",
     variant = "mine",
-    mounts = {},
+    -- rendered all the way round, see tools/blender/wagon.py FULL_TURN
+    full_turn = true,
+    fluid = false,
+    -- { along, across }: two rows of three, the across offset to the right of the front
+    mounts = { { -2.05, -0.47 }, { -0.95, -0.47 }, { 0.15, -0.47 }, { -2.05, 0.47 }, { -0.95, 0.47 }, { 0.15, 0.47 } },
+    -- one package per basket, so a few packages spread over all baskets
+    refill = 1,
+    -- the baskets take their own copy of the wagon mines (see prototypes/mine.lua)
+    loads = { ["wagon-mine"] = "military-wagons-wagon-mine" },
+    -- no target priorities: the baskets fire only where the remote points
+    targets = false,
+    -- each basket throws one package per reload (ticks)
+    reload = 600,
+    -- the baskets fire only while the train stands and turn home (turns per tick) before it
+    -- sets off, like an artillery wagon's cannon (control.lua)
+    park_speed = 0.01,
   },
 }
 

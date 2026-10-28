@@ -1,13 +1,29 @@
 local rig = require("prototypes.rig")
+local wagon_config = require("config")
 local graphics = require("prototypes.graphics")
 
--- Mine launcher wagon: an artillery wagon that throws land mines, only where the player
--- points the mine launcher remote. Its flares carry their own shot category, so real
--- artillery ignores them, and the vanilla artillery flare gets the artillery shell
--- category in data-final-fixes.lua, so the launcher ignores those in turn.
+-- Mine launcher wagon: an artillery wagon with six launcher baskets on its roof. Each
+-- basket is a hidden artillery turret riding on the wagon (control.lua) that throws a
+-- package of land mines, only where the player points the mine launcher remote.
+-- The baskets fire a copy of the wagon mine with its own category, which only the remote's
+-- flares call for: real artillery ignores those flares, the vanilla artillery flare gets
+-- the artillery shell category in data-final-fixes.lua, and the wagon's own gun, loaded
+-- with the wagon mines the baskets are refilled from, never answers any flare.
 local CATEGORY = "wagon-mine"
+local BASKET_CATEGORY = wagon_config.shell_prefix .. "wagon-mine"
+local BASKET_AMMO = wagon_config.shell_prefix .. "wagon-mine"
+-- control.lua notes each basket's shot with this script trigger
+local SHOT_EFFECT = "military-wagons-basket-shot"
+-- The launcher box's face, where a package leaves (tools/blender/turret.py mine_basket): this
+-- far above the basket's mount on screen (1.85 tiles up, seen from 50 degrees), and this far
+-- out in front of the turning base.
+local MUZZLE_LIFT = 1.19
+local MUZZLE_OUT = 0.2
 local RANGE = 120
 local MIN_RANGE = 16
+-- one thrown mine is a package of this many land mines, scattered around the target
+local MINES_PER_SHOT = 5
+local SCATTER = 2.5
 
 -- config: this wagon's entry in config.wagons
 return function(config)
@@ -27,6 +43,16 @@ return function(config)
   wagon.color = { r = 0.33, g = 0.35, b = 0.24, a = 1 }
   wagon.allow_manual_color = true
   wagon.factoriopedia_simulation = nil
+  -- the baskets on the roof are turrets of their own: no vanilla cannon on the wagon
+  wagon.cannon_base_pictures = nil
+  wagon.cannon_barrel_pictures = nil
+  wagon.cannon_base_shift_when_horizontal = 0
+  wagon.cannon_base_shift_when_vertical = 0
+  wagon.cannon_base_height = 1.9
+  wagon.cannon_parking_frame_count = 0
+  -- the remote shows the wagon's range: no manual bonus, so it matches the baskets' 120 tiles
+  wagon.manual_range_modifier = 1
+  wagon.rotating_sound = nil
   rig.armour(wagon)
   local pictures = graphics.wagon_pictures(config.variant)
   if pictures then wagon.pictures = pictures end
@@ -45,9 +71,40 @@ return function(config)
   gun.attack_parameters.ammo_categories = nil
   gun.attack_parameters.range = RANGE
   gun.attack_parameters.min_range = MIN_RANGE
-  gun.attack_parameters.cooldown = 60
 
-  -- the mine flies like a shell and lands as an armed land mine of the wagon's force
+  local basket_gun = table.deepcopy(gun)
+  basket_gun.name = config.turret
+  basket_gun.attack_parameters.ammo_category = BASKET_CATEGORY
+  basket_gun.attack_parameters.cooldown = config.reload
+  basket_gun.attack_parameters.projectile_creation_distance = 0
+  basket_gun.attack_parameters.projectile_center = { 0, 0 }
+  basket_gun.attack_parameters.projectile_creation_parameters = nil
+
+  -- A basket: an artillery turret without base, turning on its own. Its rendered picture
+  -- (graphics/mine/entity/turret.lua) sits at its height on the wagon. Without renders
+  -- the baskets are invisible and the wagon picture shows them.
+  local basket = rig.hide(table.deepcopy(data.raw["artillery-turret"]["artillery-turret"]), config.turret)
+  basket.gun = config.turret
+  basket.inventory_size = 1
+  basket.ammo_stack_limit = config.refill
+  basket.automated_ammo_count = nil
+  basket.disable_automatic_firing = true
+  -- the remote's flares count as manual targets: no range bonus over the 120 tiles
+  basket.manual_range_modifier = 1
+  basket.alert_when_attacking = false
+  basket.turret_rotation_speed = config.park_speed
+  basket.turn_after_shooting_cooldown = 0
+  basket.cannon_parking_frame_count = 0
+  basket.base_picture = nil
+  basket.cannon_barrel_pictures = nil
+  basket.cannon_base_pictures = graphics.turret_animation(config.variant)
+  -- the vanilla cannon is drawn about a tile above its entity; the rendered basket
+  -- already sits at its height on the wagon
+  basket.cannon_base_shift = { 0, 0, 0 }
+  basket.rotating_sound = nil
+  basket.factoriopedia_simulation = nil
+
+  -- the package flies like a shell and scatters armed land mines of the wagon's force
   local projectile = table.deepcopy(data.raw["artillery-projectile"]["artillery-projectile"])
   projectile.name = "wagon-mine-projectile"
   projectile.reveal_map = false
@@ -63,7 +120,15 @@ return function(config)
     action_delivery = {
       type = "instant",
       target_effects = {
-        { type = "create-entity", entity_name = "land-mine", check_buildability = true },
+        {
+          type = "create-entity",
+          entity_name = "land-mine",
+          repeat_count = MINES_PER_SHOT,
+          offset_deviation = { { -SCATTER, -SCATTER }, { SCATTER, SCATTER } },
+          find_non_colliding_position = true,
+          non_colliding_search_radius = 2,
+          check_buildability = true,
+        },
       },
     },
   }
@@ -73,9 +138,17 @@ return function(config)
   local ammo_type = table.deepcopy(shell.ammo_type)
   ammo_type.action.action_delivery.projectile = "wagon-mine-projectile"
 
+  -- the baskets' copy tells control.lua which basket fired
+  local basket_ammo_type = table.deepcopy(ammo_type)
+  local delivery = basket_ammo_type.action.action_delivery
+  local source_effects = delivery.source_effects or {}
+  if source_effects.type then source_effects = { source_effects } end
+  source_effects[#source_effects + 1] = { type = "script", effect_id = SHOT_EFFECT }
+  delivery.source_effects = source_effects
+
   local flare = table.deepcopy(data.raw["artillery-flare"]["artillery-flare"])
   flare.name = "mine-launcher-flare"
-  flare.shot_category = CATEGORY
+  flare.shot_category = BASKET_CATEGORY
   flare.shots_per_flare = 1
   flare.map_color = { 0.9, 0.6, 0.1 }
 
@@ -102,9 +175,27 @@ return function(config)
 
   data:extend({
     { type = "ammo-category", name = CATEGORY },
+    { type = "ammo-category", name = BASKET_CATEGORY, hidden = true },
     wagon,
     item,
     gun,
+    basket_gun,
+    {
+      type = "ammo",
+      name = BASKET_AMMO,
+      localised_name = { "item-name.wagon-mine" },
+      localised_description = { "item-description.wagon-mine" },
+      icons = {
+        { icon = "__base__/graphics/icons/land-mine.png", icon_size = 64 },
+        { icon = "__base__/graphics/icons/explosives.png", icon_size = 64, scale = 0.3, shift = { 8, 8 } },
+      },
+      ammo_category = BASKET_CATEGORY,
+      ammo_type = basket_ammo_type,
+      hidden = true,
+      hidden_in_factoriopedia = true,
+      auto_recycle = false,
+      stack_size = 20,
+    },
     projectile,
     flare,
     remote,
@@ -127,21 +218,34 @@ return function(config)
       energy_required = 4,
       enabled = false,
       ingredients = {
-        { type = "item", name = "land-mine", amount = 1 },
+        { type = "item", name = "land-mine", amount = MINES_PER_SHOT },
         { type = "item", name = "explosives", amount = 1 },
       },
       results = { { type = "item", name = "wagon-mine", amount = 1 } },
     },
+    -- like the artillery remote: no recipe, the shortcut bar puts it in the cursor
     {
-      type = "recipe",
-      name = "mine-launcher-remote",
-      energy_required = 1,
-      enabled = false,
-      ingredients = {
-        { type = "item", name = "electronic-circuit", amount = 1 },
-        { type = "item", name = "land-mine", amount = 1 },
+      type = "shortcut",
+      name = "give-mine-launcher-remote",
+      order = "e[spidertron-remote]-m[mine-launcher-remote]",
+      action = "spawn-item",
+      technology_to_unlock = config.name,
+      unavailable_until_unlocked = true,
+      item_to_spawn = "mine-launcher-remote",
+      icons = {
+        {
+          icon = "__base__/graphics/icons/shortcut-toolbar/mip/artillery-targeting-remote-x56.png",
+          icon_size = 56,
+          tint = { 1, 0.75, 0.4 },
+        },
       },
-      results = { { type = "item", name = "mine-launcher-remote", amount = 1 } },
+      small_icons = {
+        {
+          icon = "__base__/graphics/icons/shortcut-toolbar/mip/artillery-targeting-remote-x24.png",
+          icon_size = 24,
+          tint = { 1, 0.75, 0.4 },
+        },
+      },
     },
     {
       type = "recipe",
@@ -166,10 +270,26 @@ return function(config)
       effects = {
         { type = "unlock-recipe", recipe = config.name },
         { type = "unlock-recipe", recipe = "wagon-mine" },
-        { type = "unlock-recipe", recipe = "mine-launcher-remote" },
       },
       prerequisites = { "railway", "land-mine", "explosives" },
       unit = tech_units,
     },
   })
+  -- The shot and its muzzle flash leave from the turret entity, which sits below its drawn
+  -- basket: on the ground under the mount, and sunk further south (see prototypes/rig.lua).
+  -- Each variant gets a gun of its own that starts them at the drawn basket's face.
+  local variants = rig.variants(basket, config.mounts)
+  for i = 1, #variants do
+    local variant = variants[i]
+    local k = tonumber(variant.name:match("%-sink%-(%d+)$") or 0)
+    local sink = variant.name:match("%-elevated$") and 0 or rig.sink(k)
+    local variant_gun = table.deepcopy(basket_gun)
+    variant_gun.name = variant.name
+    variant_gun.attack_parameters.projectile_center = { 0, -(sink + MUZZLE_LIFT) }
+    variant_gun.attack_parameters.projectile_creation_distance = MUZZLE_OUT
+    variant.gun = variant_gun.name
+    -- the step 0 gun has the basket gun's name and takes its place
+    variants[#variants + 1] = variant_gun
+  end
+  data:extend(variants)
 end

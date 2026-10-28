@@ -9,10 +9,16 @@ local config = require("config")
 local rigging = require("prototypes.rig")
 
 local REFILL_INTERVAL = 30
+-- alt mode ammo icons sit this far above a turret's mount, where its head is drawn
+local ICON_LIFT = 1.0
+-- the mine launcher's own cannon turned this far holds its train (see stand)
+local LOCKED = 0.5
+
 local FORESHORTEN = rigging.FORESHORTEN
 
 ---@class Kind one entry of config.wagons, plus:
 ---@field sink_steps integer
+---@field symmetric boolean every mount has its mirror image through the wagon centre
 
 -- KINDS[wagon name] = Kind, only the turret wagons switched on in the startup settings
 local KINDS = {}
@@ -27,6 +33,17 @@ for _, kind in pairs(config.enabled()) do
   ARMORED[kind.name] = true
   if #kind.mounts > 0 then
     kind.sink_steps = rigging.sink_steps(kind.mounts)
+    -- every mount has its mirror image through the wagon centre
+    kind.symmetric = true
+    for _, m in pairs(kind.mounts) do
+      local along, across = rigging.mount(m)
+      local mirrored = false
+      for _, n in pairs(kind.mounts) do
+        local a2, c2 = rigging.mount(n)
+        if math.abs(a2 + along) < 1e-6 and math.abs(c2 + across) < 1e-6 then mirrored = true end
+      end
+      kind.symmetric = kind.symmetric and mirrored
+    end
     KINDS[kind.name] = kind
     WAGON_NAMES[#WAGON_NAMES + 1] = kind.name
     for _, range in pairs(kind.min_ranges or { false }) do
@@ -38,6 +55,21 @@ for _, kind in pairs(config.enabled()) do
     end
   end
 end
+-- Where the wagon's drawn front points. Most wagon sprites have back equal to front, so a
+-- wagon turned round (orientation + 0.5) is drawn the same; the mounts follow the drawing.
+-- Wagons rendered all the way round (kind.full_turn) are drawn as they are turned.
+-- The game picks the nearest of 256 directions; with back equal to front, directions 128..255
+-- show the sprite of the opposite one. Taking the half from that pick (not orientation % 0.5)
+-- keeps wagons running north-south, which wobble around 0.5 and 1, from flipping their mounts.
+local function drawn(kind, orientation)
+  -- symmetric mounts look the same from either end: no need to pick a half, which can be off
+  -- by a tick where the wagon turns into a north-south line
+  if kind.full_turn or kind.symmetric then return orientation % 1 end
+  local half = math.floor(orientation * 256 + 0.5) % 256 >= 128
+  return half and orientation - 0.5 or orientation
+end
+local function front(wagon) return drawn(KINDS[wagon.name], wagon.orientation) % 1 end
+
 -- Without elevated rails every wagon is on the ground.
 local ELEVATED_RAILS = script.active_mods["elevated-rails"] ~= nil
 
@@ -51,6 +83,11 @@ local ELEVATED_RAILS = script.active_mods["elevated-rails"] ~= nil
 ---@field targets table<integer, string>? priority list slot -> entity name
 ---@field ignore boolean? the turrets shoot only at targets on the priority list
 ---@field min_range number? chosen minimum range, nil = the turret's own
+---@field last_orientation number? wagon orientation on the previous tick while moving
+---@field fired table<integer, integer>? tick of each turret's last shot (turrets with a reload)
+---@field icons table<integer, {object: LuaRenderObject, sprite: string}>? alt mode icon of each turret
+---@field parking boolean? the baskets turn home so the train can set off (see park_step)
+---@field armed boolean? the baskets are on and the train is held (see stand)
 
 -- storage.rigs[wagon unit number] = Rig
 
@@ -87,8 +124,33 @@ local function create_turret(rig, elevated, sink, position)
     create_build_effect_smoke = false,
   })
   turret.destructible = false
+  -- baskets start at home, facing the wagon's drawn front (see stand)
+  if turret.type == "artillery-turret" then turret.relative_turret_orientation = front(wagon) end
   if rig.targets or rig.ignore then apply_targets(rig, turret) end
   return turret
+end
+
+-- The original of a shell copy, or the item itself.
+local function original_item(name)
+  if name:sub(1, #config.shell_prefix) ~= config.shell_prefix then return name end
+  local original = name:sub(#config.shell_prefix + 1)
+  return prototypes.item[original] and original or name
+end
+
+local update_icons -- defined below with the ammo supply
+
+-- A roof turret's ammo: artillery turrets (the mine launcher's baskets) have their own inventory.
+local function turret_ammo(turret)
+  return turret.get_inventory(
+    turret.type == "artillery-turret" and defines.inventory.artillery_turret_ammo or defines.inventory.turret_ammo
+  )
+end
+
+-- The wagon's supply the turrets are refilled from: the cargo, or an artillery wagon's ammo slots.
+local function supply(wagon)
+  return wagon.get_inventory(
+    wagon.type == "artillery-wagon" and defines.inventory.artillery_wagon_ammo or defines.inventory.cargo_wagon
+  )
 end
 
 -- Replaces turret i by another variant (elevated, or another sink step), keeping its ammo and aim.
@@ -100,16 +162,22 @@ local function swap(rig, i, elevated, sink)
       new.insert_fluid({ name = name, amount = amount })
     end
   else
-    local from = old.get_inventory(defines.inventory.turret_ammo)
-    local to = new.get_inventory(defines.inventory.turret_ammo)
+    local from = turret_ammo(old)
+    local to = turret_ammo(new)
     for s = 1, #from do
       if from[s].valid_for_read then to.insert(from[s]) end
     end
   end
-  new.orientation = old.orientation
+  if new.type == "artillery-turret" then
+    new.relative_turret_orientation = old.relative_turret_orientation
+  else
+    new.orientation = old.orientation
+  end
+  new.disabled_by_script = old.disabled_by_script
   old.destroy()
   rig.turrets[i] = new
   rig.sinks[i] = sink
+  if rig.icons then update_icons(rig, KINDS[rig.kind]) end
   return new
 end
 
@@ -137,20 +205,44 @@ local function place(rig, predict)
     x, y = x + x - last.x, y + y - last.y
   end
   rig.last = predict and pos or nil
-  local a = wagon.orientation * 2 * math.pi
+  -- in curves the wagon turns too: predict its orientation the same way
+  local o = wagon.orientation
+  local last_o = rig.last_orientation
+  if predict and last_o then
+    local d = o - last_o
+    if d > 0.5 then d = d - 1 elseif d < -0.5 then d = d + 1 end
+    o = o + d
+  end
+  rig.last_orientation = predict and wagon.orientation or nil
+  o = drawn(kind, o) -- the drawn front, see front()
+  local a = o * 2 * math.pi
   -- The mounts follow the drawn (foreshortened) roof, not the world.
   local ax, ay = math.sin(a), -math.cos(a) * FORESHORTEN
+  -- to the right of the wagon's front
+  local rx, ry = math.cos(a), math.sin(a) * FORESHORTEN
   for i, turret in pairs(rig.turrets) do
-    local offset = kind.mounts[i]
-    local ty = y + ay * offset
+    local along, across = rigging.mount(kind.mounts[i])
+    local dy = ay * along + ry * across
+    local ty = y + dy
     local sink = 0
     if not elevated then
       -- a turret north of the wagon centre sinks south until it is drawn after the wagon
-      sink = math.min(kind.sink_steps, math.max(0, math.ceil((below - ay * offset) / rigging.SINK_STEP - 1e-6)))
+      sink = math.min(kind.sink_steps, math.max(0, math.ceil((below - dy) / rigging.SINK_STEP - 1e-6)))
       ty = ty + rigging.sink(sink)
     end
     if elevated ~= rig.elevated or sink ~= (rig.sinks[i] or 0) then turret = swap(rig, i, elevated, sink) end
-    if not turret.teleport({ x + ax * offset, ty }) then return false end
+    if not turret.teleport({ x + ax * along + rx * across, ty }) then return false end
+    if kind.park_speed and predict then
+      -- on the move the baskets are off and face the wagon's front; if the train set off
+      -- before they were home (a train the lock does not hold), they jump there
+      if not turret.disabled_by_script then turret.disabled_by_script = true end
+      turret.relative_turret_orientation = o % 1
+    end
+  end
+  if kind.park_speed and predict then
+    rig.parking = nil
+    rig.armed = nil
+    if wagon.relative_turret_orientation ~= 0 then wagon.relative_turret_orientation = 0 end
   end
   rig.elevated = elevated
   return true
@@ -200,6 +292,8 @@ local turret_accepts = {}
 
 local function accepted(kind)
   if turret_accepts[kind.name] then return turret_accepts[kind.name] end
+  -- the kind names what its turrets take
+  if kind.loads then return kind.loads end
   local accepts = {}
   turret_accepts[kind.name] = accepts
   local params = prototypes.entity[kind.turret].attack_parameters
@@ -226,12 +320,18 @@ local function accepted(kind)
 end
 
 local function refill_ammo(rig, kind)
-  local cargo = rig.wagon.get_inventory(defines.inventory.cargo_wagon)
+  local cargo = supply(rig.wagon)
   if not cargo or cargo.is_empty() then return end
   local accepts = accepted(kind)
-  for _, turret in pairs(rig.turrets) do
-    local ammo = turret.get_inventory(defines.inventory.turret_ammo)
+  local tick = game.tick
+  for i, turret in pairs(rig.turrets) do
+    local ammo = turret_ammo(turret)
     local need = kind.refill - ammo.get_item_count()
+    -- A turret with a reload gets its next round only when the reload is over. Swapping it for
+    -- another variant (in curves) makes a new entity without the cooldown; empty, it waits anyway.
+    -- (It may get the round up to a refill interval late.)
+    local fired = kind.reload and rig.fired and rig.fired[i]
+    if fired and tick - fired < kind.reload then need = 0 end
     if need > 0 then
       local loaded = ammo[1].valid_for_read and ammo[1]
       for _, stack in pairs(cargo.get_contents()) do
@@ -271,6 +371,44 @@ local function refill_fluid(rig, kind)
   end
 end
 
+-- Alt mode icons of what each turret is loaded with, drawn above the turret's mount
+-- (the turret entity itself sits sunk south of it, see place()).
+update_icons = function(rig, kind)
+  rig.icons = rig.icons or {}
+  for i, turret in pairs(rig.turrets) do
+    local sprite
+    if kind.fluid then
+      local name = next(turret.get_fluid_contents())
+      sprite = name and "fluid/" .. name
+    else
+      local stack = turret_ammo(turret)[1]
+      sprite = stack.valid_for_read and "item/" .. original_item(stack.name)
+    end
+    local icon = rig.icons[i]
+    local sink = rig.elevated and 0 or rigging.sink(rig.sinks and rig.sinks[i] or 0)
+    if icon and (not icon.object.valid or icon.sprite ~= sprite or icon.sink ~= sink) then
+      if icon.object.valid then icon.object.destroy() end
+      icon = nil
+      rig.icons[i] = nil
+    end
+    if sprite and not icon then
+      rig.icons[i] = {
+        object = rendering.draw_sprite({
+          sprite = sprite,
+          target = { entity = turret, offset = { 0, -sink - ICON_LIFT } },
+          surface = turret.surface,
+          x_scale = 0.5,
+          y_scale = 0.5,
+          render_layer = "entity-info-icon",
+          only_in_alt_mode = true,
+        }),
+        sprite = sprite,
+        sink = sink,
+      }
+    end
+  end
+end
+
 local function refill(rig)
   local kind = KINDS[rig.kind]
   if kind.fluid then
@@ -278,9 +416,102 @@ local function refill(rig)
   else
     refill_ammo(rig, kind)
   end
+  update_icons(rig, kind)
+end
+
+-- A basket of the mine launcher fired: note when, for its reload (see refill_ammo).
+local function on_script_trigger(event)
+  if event.effect_id ~= "military-wagons-basket-shot" then return end
+  local basket = event.source_entity
+  if not (basket and basket.valid) then return end
+  for _, rig in pairs(storage.rigs) do
+    if KINDS[rig.kind].reload then
+      for i, turret in pairs(rig.turrets) do
+        if turret == basket then
+          rig.fired = rig.fired or {}
+          rig.fired[i] = event.tick
+          return
+        end
+      end
+    end
+  end
 end
 
 -- Events ---------------------------------------------------------------------
+
+-- Mine launcher baskets fire only while the train stands, like an artillery wagon's cannon.
+-- The wagon's own (invisible, never firing) cannon is the lock: the engine does not let a
+-- train set off, by schedule or by hand, while that cannon is turned away from its parked
+-- position, and it never parks it by itself. While the train stands, the baskets are on and
+-- the cannon is turned (LOCKED). When the train wants to leave, the baskets are switched off
+-- and turned home at their own turning speed; then the cannon is parked and the train goes.
+
+-- signed shortest turn from one orientation to another, in turns
+local function turn(from, to)
+  local d = (to - from) % 1
+  return d > 0.5 and d - 1 or d
+end
+
+local MOVING = {
+  [defines.train_state.on_the_path] = true,
+  [defines.train_state.arrive_signal] = true,
+  [defines.train_state.arrive_station] = true,
+}
+
+-- Whether a standing train is about to set off: by schedule, or a driver accelerates.
+local function wants_to_go(train)
+  if not train.manual_mode then return MOVING[train.state] or false end
+  for _, movers in pairs(train.locomotives) do
+    for _, locomotive in pairs(movers) do
+      local driver = locomotive.get_driver()
+      if driver and driver.riding_state.acceleration ~= defines.riding.acceleration.nothing then return true end
+    end
+  end
+  return false
+end
+
+-- One tick of turning the baskets home; parks the wagon's cannon when they are all there.
+local function park_step(rig)
+  local kind = KINDS[rig.kind]
+  local home = front(rig.wagon)
+  local done = true
+  for _, turret in pairs(rig.turrets) do
+    local now = turret.relative_turret_orientation
+    local d = turn(now, home)
+    if math.abs(d) > kind.park_speed then
+      turret.relative_turret_orientation = (now + (d > 0 and kind.park_speed or -kind.park_speed)) % 1
+      done = false
+    elseif d ~= 0 then
+      turret.relative_turret_orientation = home
+    end
+  end
+  if done then
+    rig.parking = nil
+    rig.wagon.relative_turret_orientation = 0
+  end
+end
+
+-- Every tick for a standing wagon with baskets: on and the train held, or, when the train
+-- wants to leave, off and turning home. A few reads per tick, only for these wagons.
+local function stand(rig)
+  if rig.parking then return park_step(rig) end
+  local wagon = rig.wagon
+  if wants_to_go(wagon.train) then
+    for _, turret in pairs(rig.turrets) do
+      if not turret.disabled_by_script then turret.disabled_by_script = true end
+    end
+    rig.armed = nil
+    rig.parking = true
+    return park_step(rig)
+  end
+  if not rig.armed then
+    for _, turret in pairs(rig.turrets) do
+      if turret.disabled_by_script then turret.disabled_by_script = false end
+    end
+    wagon.relative_turret_orientation = LOCKED
+    rig.armed = true
+  end
+end
 
 local function on_tick()
   for id, rig in pairs(storage.rigs) do
@@ -292,6 +523,8 @@ local function on_tick()
       elseif rig.last then
         -- one more update after the train stopped, so the turrets end up exactly on the wagon
         ok = place(rig, false)
+      elseif KINDS[rig.kind].park_speed and intact(rig) then
+        stand(rig)
       end
       if not ok then repair(rig) end
     else
@@ -319,13 +552,6 @@ local function on_built(event)
   if wagon and wagon.valid and KINDS[wagon.name] then create_rig(wagon) end
 end
 
--- The original of a shell copy, or the item itself.
-local function original_item(name)
-  if name:sub(1, #config.shell_prefix) ~= config.shell_prefix then return name end
-  local original = name:sub(#config.shell_prefix + 1)
-  return prototypes.item[original] and original or name
-end
-
 -- Mined wagons give back the ammo that sat in their turrets.
 local function on_mined(event)
   local wagon = event.entity
@@ -333,7 +559,7 @@ local function on_mined(event)
   if not rig then return end
   if event.buffer and not KINDS[rig.kind].fluid then
     for _, turret in pairs(rig.turrets) do
-      local ammo = turret.get_inventory(defines.inventory.turret_ammo)
+      local ammo = turret_ammo(turret)
       for i = 1, #ammo do
         local stack = ammo[i]
         if stack.valid_for_read then
@@ -591,8 +817,10 @@ end
 local function on_gui_opened(event)
   local wagon = event.entity
   if not (wagon and wagon.valid and ARMORED[wagon.name]) then return end
-  local rig = KINDS[wagon.name] and (storage.rigs[wagon.unit_number] or create_rig(wagon))
-  open_panel(game.get_player(event.player_index), wagon, rig)
+  local kind = KINDS[wagon.name]
+  local rig = kind and (storage.rigs[wagon.unit_number] or create_rig(wagon))
+  -- wagons whose turrets take no target priorities get the armour panel only
+  open_panel(game.get_player(event.player_index), wagon, kind and kind.targets ~= false and rig or nil)
 end
 
 local function on_gui_closed(event)
@@ -752,6 +980,9 @@ if next(ARMORED_NAMES) then
   script.on_event(defines.events.on_gui_closed, on_gui_closed)
   script.on_event(defines.events.on_player_placed_equipment, on_equipment_changed)
   script.on_event(defines.events.on_player_removed_equipment, on_equipment_changed)
+end
+for _, kind in pairs(KINDS) do
+  if kind.reload then script.on_event(defines.events.on_script_trigger_effect, on_script_trigger) end
 end
 script.on_event(defines.events.on_object_destroyed, on_destroyed)
 script.on_nth_tick(REFILL_INTERVAL, on_refill)

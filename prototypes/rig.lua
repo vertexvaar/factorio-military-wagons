@@ -22,12 +22,20 @@ function rig.range_name(name, range, ranges) return range == ranges[1] and name 
 
 function rig.sink_name(name, k) return k == 0 and name or name .. "-sink-" .. k end
 
+-- A mount is an offset along the wagon axis, or { along, across } with across to the
+-- right of the wagon's front. Returns along, across.
+function rig.mount(m)
+  if type(m) == "table" then return m[1], m[2] end
+  return m, 0
+end
+
 -- How many steps the turret furthest from the wagon centre can need, with one
 -- tile to spare for wagons drawn north of their position.
 function rig.sink_steps(mounts)
   local far = 0
-  for _, offset in pairs(mounts) do
-    far = math.max(far, math.abs(offset))
+  for _, m in pairs(mounts) do
+    local along, across = rig.mount(m)
+    far = math.max(far, math.sqrt(along * along + across * across))
   end
   return math.ceil((far * rig.FORESHORTEN + 1) / rig.SINK_STEP)
 end
@@ -57,12 +65,14 @@ local ANIMATIONS = {
   "folding_animation",
   "energy_glow_animation",
   "muzzle_animation",
+  -- artillery turrets
+  "cannon_base_pictures",
+  "cannon_barrel_pictures",
 }
 
--- Copies a turret prototype and strips everything that would make it a building:
--- no base, no collision, not selectable, not minable, not shown anywhere.
-function rig.turret(source, name, lift)
-  local turret = table.deepcopy(source)
+-- Strips everything from a copied turret prototype that would make it a building:
+-- no collision, not selectable, not minable, not shown anywhere.
+function rig.hide(turret, name)
   turret.name = name
   turret.localised_name = { "entity-name." .. name }
   turret.flags = {
@@ -75,6 +85,9 @@ function rig.turret(source, name, lift)
     "not-in-kill-statistics",
     "no-automated-item-insertion",
     "no-automated-item-removal",
+    -- alt mode would show the ammo where the turret entity is, not where it is drawn;
+    -- control.lua draws the icons at the drawn turret instead
+    "hide-alt-info",
   }
   turret.hidden = true
   turret.hidden_in_factoriopedia = true
@@ -92,6 +105,12 @@ function rig.turret(source, name, lift)
   turret.circuit_connector = nil
   turret.circuit_wire_max_distance = nil
   turret.water_reflection = nil
+  return turret
+end
+
+-- Copies an ammo or fluid turret prototype and makes it a roof turret: hidden, no base.
+function rig.turret(source, name, lift)
+  local turret = rig.hide(table.deepcopy(source), name)
   turret.graphics_set = {}
   -- same layer as the wagon and trees, so trees in front of the wagon cover the turret
   turret.gun_animation_render_layer = "object"
@@ -110,7 +129,8 @@ function rig.lift_turret(turret, lift)
     rig.lift(turret[key], lift)
   end
   -- shots must leave the lifted barrel, not the ground below it
-  local attack = turret.attack_parameters
+  -- artillery turrets have their attack parameters in their gun
+  local attack = turret.attack_parameters or {}
   if attack.projectile_center then
     local c = attack.projectile_center
     attack.projectile_center = { c[1] or c.x or 0, (c[2] or c.y or 0) + lift }

@@ -14,7 +14,8 @@ local function sheet(dir, meta, extra)
     shift = meta.shift,
     scale = 0.5,
     direction_count = meta.frame_count,
-    back_equals_front = true,
+    -- wagons rendered all the way round (256 directions) have a distinct back
+    back_equals_front = meta.frame_count < 256,
     allow_low_quality_rotation = true,
     usage = "train",
     line_length = meta.line_length,

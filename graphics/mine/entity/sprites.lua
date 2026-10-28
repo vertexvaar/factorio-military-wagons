@@ -2,30 +2,30 @@
 return {
   ["wagon"] = {
     ["color"] = {
-      ["files"] = { "wagon-color-1.png", "wagon-color-2.png", "wagon-color-3.png", "wagon-color-4.png" },
+      ["files"] = { "wagon-color-1.png", "wagon-color-2.png", "wagon-color-3.png", "wagon-color-4.png", "wagon-color-5.png", "wagon-color-6.png", "wagon-color-7.png", "wagon-color-8.png" },
       ["width"] = 454,
       ["height"] = 386,
       ["line_length"] = 8,
       ["lines_per_file"] = 4,
-      ["frame_count"] = 128,
+      ["frame_count"] = 256,
       ["shift"] = { 0.0000, -0.6500 }
     },
     ["mask"] = {
-      ["files"] = { "wagon-mask-1.png", "wagon-mask-2.png", "wagon-mask-3.png", "wagon-mask-4.png" },
-      ["width"] = 378,
+      ["files"] = { "wagon-mask-1.png", "wagon-mask-2.png", "wagon-mask-3.png", "wagon-mask-4.png", "wagon-mask-5.png", "wagon-mask-6.png", "wagon-mask-7.png", "wagon-mask-8.png" },
+      ["width"] = 380,
       ["height"] = 346,
       ["line_length"] = 8,
       ["lines_per_file"] = 4,
-      ["frame_count"] = 128,
+      ["frame_count"] = 256,
       ["shift"] = { 0.0000, -0.8219 }
     },
     ["shadow"] = {
-      ["files"] = { "wagon-shadow-1.png", "wagon-shadow-2.png", "wagon-shadow-3.png", "wagon-shadow-4.png" },
+      ["files"] = { "wagon-shadow-1.png", "wagon-shadow-2.png", "wagon-shadow-3.png", "wagon-shadow-4.png", "wagon-shadow-5.png", "wagon-shadow-6.png", "wagon-shadow-7.png", "wagon-shadow-8.png" },
       ["width"] = 512,
       ["height"] = 576,
       ["line_length"] = 8,
       ["lines_per_file"] = 4,
-      ["frame_count"] = 128,
+      ["frame_count"] = 256,
       ["shift"] = { 0.0000, -1.4000 }
     }
   }
