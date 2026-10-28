@@ -1,6 +1,6 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.1
-Date: 2026-10-26
+Date: 2026-10-28
   Changes:
     - A thrown mine is now a package of 5 land mines (recipe: 5 land mines and 1 explosives). On impact the mines scatter around the target.
     - The mine launcher remote is in the shortcut bar, like the artillery remote, and no longer crafted.
