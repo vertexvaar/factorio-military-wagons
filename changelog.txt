@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.2
+Date: 2026-10-29
+  Changes:
+    - Without Space Age, carbon is now made from coal in the chemical plant instead of furnaces. As a furnace recipe, furnaces fed coal from their ore belt switched to carbon whenever the ore ran out and flooded the belt with carbon.
+    - The armour steel technology now requires oil processing, which unlocks the chemical plant its recipes need.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.1
 Date: 2026-10-28
   Changes:

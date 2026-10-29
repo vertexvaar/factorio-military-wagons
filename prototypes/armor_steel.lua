@@ -3,6 +3,9 @@
 --
 -- Space Age has carbon; without it this mod brings the item and a recipe that
 -- cokes it from coal. With Space Age the player has to get carbon the usual way.
+-- The coking recipe runs in the chemical plant, not in furnaces: as a smelting
+-- recipe, furnaces fed coal from their ore belt would pick it on their own and
+-- flood the belt with carbon.
 
 local space_age = data.raw.item["carbon"] ~= nil
 local ok, icons = pcall(require, "graphics.armor.icons")
@@ -30,7 +33,7 @@ else
     {
       type = "recipe",
       name = "military-wagons-carbon",
-      categories = { "smelting" },
+      categories = { "chemistry" },
       energy_required = 3.2,
       enabled = false,
       ingredients = { { type = "item", name = "coal", amount = 2 } },
@@ -42,7 +45,8 @@ end
 local effects = { { type = "unlock-recipe", recipe = "armor-steel" } }
 if not space_age then table.insert(effects, 1, { type = "unlock-recipe", recipe = "military-wagons-carbon" }) end
 
-local prerequisites = { "steel-processing", "military-2" }
+-- oil processing brings the chemical plant the recipes need
+local prerequisites = { "steel-processing", "military-2", "oil-processing" }
 if carbon_tech then prerequisites[#prerequisites + 1] = carbon_tech end
 
 data:extend({

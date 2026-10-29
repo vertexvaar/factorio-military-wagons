@@ -236,6 +236,16 @@ local function setup()
       and (own_carbon == (unlocks["military-wagons-carbon"] == true)),
     "carbon recipe only without Space Age"
   )
+  if own_carbon then
+    report(
+      prototypes.recipe["military-wagons-carbon"].categories[1] == "chemistry",
+      "carbon recipe runs in the chemical plant, not in furnaces"
+    )
+  end
+  report(
+    prototypes.technology["armor-steel"].prerequisites["oil-processing"] ~= nil,
+    "armor steel technology needs oil processing"
+  )
   local surface = game.surfaces.nauvis
   game.map_settings.enemy_expansion.enabled = false
   surface.request_to_generate_chunks({ 0, 0 }, 6)
