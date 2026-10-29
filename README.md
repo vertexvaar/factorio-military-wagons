@@ -25,7 +25,7 @@ their vanilla counterparts, also while the train is moving, and reload from the 
 
 All military wagons have a 6x8 equipment grid and 2000 health, like a tank. The grid takes everything a tank's
 grid takes, plus armour plates (2x2, like an energy shield), which fit into military wagons only. Plates are made
-from armour steel (4 steel, 1 copper, 2 carbon, 20 water in a chemical plant; without Space Age carbon comes from coal).
+from armour steel (4 steel, 1 copper, 2 carbon, 20 water in a chemical plant; without Space Age carbon is coked from coal in a chemical plant).
 
 | Plate | Protection per plate | Space Age |
 |---|---|---|
